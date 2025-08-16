@@ -1,0 +1,6 @@
+.{
+    .name = .T_Edit,
+    .version = "0.15.0-dev.1380+e98aeeb73",
+    .paths = .{""},
+    .fingerprint = 0x9cdd1d60a6e0787e,
+}
