@@ -54,7 +54,7 @@ pub const GapBuffer = struct {
         if (new_index > self.get_num_elements()) { return error.OverflowIndex; }
         if (self.p_start == new_index){ return; }
 
-        const gap_size = self.p_end - self.p_start;
+        const gap_width = self.p_end + 1 - self.p_start;
 
         // move left
         if (new_index < self.p_start){
@@ -64,7 +64,7 @@ pub const GapBuffer = struct {
             @memmove(self.data[self.p_end + 1 - diff .. self.p_end + 1], self.data[self.p_start - diff .. self.p_start]);
 
             // overwrite old data
-            @memset(self.data[new_index .. new_index + gap_size], undefined);
+            @memset(self.data[new_index .. new_index + gap_width], undefined);
 
             // update pointers
             self.p_start -= diff;
@@ -80,7 +80,7 @@ pub const GapBuffer = struct {
             @memmove(self.data[self.p_start .. self.p_start + diff], self.data[self.p_end + 1 .. self.p_end + 1 + diff]);
 
             // overwrite old data
-            @memset(self.data[new_index .. new_index + gap_size], undefined);
+            @memset(self.data[new_index .. new_index + gap_width], undefined);
 
             // update pointers
             self.p_start += diff;
