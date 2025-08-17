@@ -18,6 +18,12 @@ pub const GapBuffer = struct {
     p_start: u32 = 0,
     p_end: u32 = buf_size - 1,
 
+    pub fn init(self: *GapBuffer, new_data: []const u8) !void {
+        if (self.data.len < new_data.len){ return error.OutOfBounds; }
+
+        @memcpy(self.data[0..new_data.len], new_data[0..]);
+        self.p_start = @intCast(new_data.len);
+    }
 
     pub fn get_num_elements(self: *GapBuffer) u32 {
         return buf_size - self.p_end - 1 + self.p_start;
@@ -84,6 +90,45 @@ pub const GapBuffer = struct {
 };
 
 
+
 // --------------------------------------------------
-// TODO: testing
+// Testing
+// --------------------------------------------------
+const testing = std.testing;
+
+
+fn test_setup() !GapBuffer {
+    const my_data = [_]u8{0, 1, 2, 3, 4, 5, 6, 7};
+
+    var g_buffer = GapBuffer{};
+    try g_buffer.init(my_data[0..]);
+
+    try testing.expect(std.mem.eql(u8, g_buffer.data[0..8], &my_data));
+
+    return g_buffer;
+}
+
+
+test "init data" {
+    _ = try test_setup();
+}
+
+
+test "move_buffer left/right" {
+    var g_buffer = try test_setup();
+
+    const start_position = g_buffer.p_start;
+    const start_data = g_buffer.data;
+
+    // move left
+    try g_buffer.move_buffer(0);
+    try testing.expectEqual(buf_size, g_buffer.data.len);
+
+    // move back
+    try g_buffer.move_buffer(start_position);
+    try testing.expectEqual(buf_size, g_buffer.data.len);
+
+    try testing.expect(std.mem.eql(u8, g_buffer.data[0..], start_data[0..]));
+}
+
 
