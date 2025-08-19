@@ -7,6 +7,7 @@ const std = @import("std");
 // --------------------------------------------------
 // local imports
 const gap_buffer = @import("gap_buffer.zig");
+const document_buffer = @import("document_buffer.zig");
 
 
 // --------------------------------------------------
@@ -29,6 +30,16 @@ pub fn main() !void {
 
     const file = try std.fs.cwd().openFile(file_path, .{});
 
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer _ = gpa.deinit();
+
+    var doc_buffer = try document_buffer.DocumentBuffer.create(allocator);
+    defer _ = doc_buffer.deinit(allocator);
+
+    var last_node : ?*document_buffer.DocumentNode = null;
+
+    // save file data
     while (true) {
         var buf: [buf_size]u8 = undefined;
         const bytes_read = try file.read(&buf);
@@ -36,8 +47,18 @@ pub fn main() !void {
         if (bytes_read == 0){ break; }
 
         std.debug.print("Bytes read: '{}'\n", .{bytes_read});
-        std.debug.print("FILE: '{any}'\n", .{buf[0..]});
-        std.debug.print("FILE: '{s}'\n", .{buf[0..]});
+        last_node = try doc_buffer.add_buffer(last_node, allocator, &buf);
+    }
+
+
+
+    var doc_iter = doc_buffer.head;
+    
+    while (doc_iter) |node| {
+        const data = try document_buffer.DocumentBuffer.get_buf_data(node);
+        std.debug.print("{s}", .{data});
+
+        doc_iter = node.next;
     }
 }
 
