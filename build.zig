@@ -19,6 +19,13 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&add_exe.step);
 
 
+    // user can specify program arguments:
+    //      `zig build run -- arg1 arg2 etc
+    if (b.args) |args| {
+        add_exe.addArgs(args);
+    }
+
+
     // --------------------------------------------------
     // Tests
     // --------------------------------------------------
