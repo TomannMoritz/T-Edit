@@ -81,6 +81,18 @@ pub const DocumentBuffer = struct {
     pub fn get_buf_data(node : *DocumentNode) ![16]u8 {
         return node.g_buffer.?.data;
     }
+
+    pub fn print_buffer(self : *DocumentBuffer) !void {
+        var doc_iter = self.head;
+
+        while (doc_iter) |node| {
+            const data = node.g_buffer.?.data;
+            std.debug.print("{s}", .{data});
+
+            doc_iter = node.next;
+        }
+        std.debug.print("\n", .{});
+    }
 };
 
 
