@@ -1,8 +1,23 @@
+// --------------------------------------------------
+// DocumentBuffer
+// --------------------------------------------------
+
 
 const std = @import("std");
 
 
 const gap_buffer = @import("gap_buffer.zig");
+const config = @import("config.zig");
+
+
+
+pub const Cursor = struct {
+    pos_x : u32,
+    pos_y : u32,
+    at_eol : bool,
+    display_index : u32,
+};
+
 
 
 pub const DocumentNode = struct {
@@ -30,11 +45,22 @@ pub const DocumentNode = struct {
 pub const DocumentBuffer = struct {
     head : ?*DocumentNode,
     tail : ?*DocumentNode,
+    cursor : Cursor,
+    pos_x : u32,
+    pos_y : u32,
 
     pub fn create(allocator : std.mem.Allocator) !*DocumentBuffer {
         const doc_buf = try allocator.create(DocumentBuffer);
         doc_buf.head = null;
         doc_buf.tail = null;
+        doc_buf.cursor = Cursor{
+            .pos_x = 0,
+            .pos_y = 0,
+            .at_eol = false,
+            .display_index = 0,
+        };
+        doc_buf.pos_x = 0;
+        doc_buf.pos_y = 0;
 
         return doc_buf;
     }
@@ -77,6 +103,66 @@ pub const DocumentBuffer = struct {
 
         return new_node;
     }
+
+    pub fn update_cursor_buf(self: *DocumentBuffer, buffer : []u8, cfg : config.Config) ![]u8 {
+        // configuration
+        const vertical_min = self.pos_y;
+        const vertical_max = self.pos_y +| (cfg.text_height -| 1);
+
+        const horizontal_min = self.pos_x;
+        const horizontal_max = self.pos_x +| (cfg.text_width -| 1);
+
+        // iterate buffers
+        var iter = self.head;
+        var line_counter : u32 = 0;
+        var col_counter : u32 = 0;
+
+        var char_counter : u32 = 0;
+
+        while (iter) |node| {
+            const node_data = node.g_buffer.?.data;
+
+            for (node_data) |ele| {
+                if (ele == 0){ continue; }
+
+                // cursor position
+                const horizontal_pos = col_counter == self.cursor.pos_x;
+                const vertical_pos = line_counter == self.cursor.pos_y;
+                if (horizontal_pos and vertical_pos){
+                        self.cursor.display_index = char_counter;
+                }
+
+                // fill buffer
+                const in_vertical_range = line_counter >= vertical_min and line_counter <= vertical_max;
+                const in_horizontal_range = col_counter >= horizontal_min and col_counter <= horizontal_max;
+                if (in_vertical_range and in_horizontal_range){
+                    buffer[char_counter] = ele;
+                    char_counter += 1;
+                }
+
+                // add cut off new lines
+                if (in_vertical_range and !in_horizontal_range){
+                    if (buffer[char_counter -| 1] != 10){
+                        buffer[char_counter] = 10;
+                        char_counter += 1;
+                    }
+                }
+
+                col_counter += 1;
+
+                // new line character
+                if (ele == 10){
+                    line_counter += 1;
+                    col_counter = 0;
+                }
+            }
+
+            iter = node.next;
+        }
+
+        return buffer;
+    }
+
 
     pub fn get_buf_data(node : *DocumentNode) ![16]u8 {
         return node.g_buffer.?.data;
