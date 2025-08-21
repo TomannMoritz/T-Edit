@@ -16,6 +16,7 @@ pub const Cursor = struct {
     pos_y : u32,
     at_eol : bool,
     display_index : u32,
+    curr_line_width : u32,
 };
 
 
@@ -48,6 +49,7 @@ pub const DocumentBuffer = struct {
     cursor : Cursor,
     pos_x : u32,
     pos_y : u32,
+    doc_height : u32,
 
     pub fn create(allocator : std.mem.Allocator) !*DocumentBuffer {
         const doc_buf = try allocator.create(DocumentBuffer);
@@ -58,9 +60,11 @@ pub const DocumentBuffer = struct {
             .pos_y = 0,
             .at_eol = false,
             .display_index = 0,
+            .curr_line_width = 0,
         };
         doc_buf.pos_x = 0;
         doc_buf.pos_y = 0;
+        doc_buf.doc_height = 0;
 
         return doc_buf;
     }
@@ -118,6 +122,7 @@ pub const DocumentBuffer = struct {
         var col_counter : u32 = 0;
 
         var char_counter : u32 = 0;
+        var curr_line_counter : u32 = 0;
 
         while (iter) |node| {
             const node_data = node.g_buffer.?.data;
@@ -128,7 +133,7 @@ pub const DocumentBuffer = struct {
                 // cursor position
                 const horizontal_pos = col_counter == self.cursor.pos_x;
                 const vertical_pos = line_counter == self.cursor.pos_y;
-                if (horizontal_pos and vertical_pos){
+                if (vertical_pos and horizontal_pos){
                         self.cursor.display_index = char_counter;
                 }
 
@@ -138,6 +143,8 @@ pub const DocumentBuffer = struct {
                 if (in_vertical_range and in_horizontal_range){
                     buffer[char_counter] = ele;
                     char_counter += 1;
+
+                    if (vertical_pos){ curr_line_counter += 1; }
                 }
 
                 // add cut off new lines
@@ -152,6 +159,11 @@ pub const DocumentBuffer = struct {
 
                 // new line character
                 if (ele == 10){
+                    // limit horizontal position to eol
+                    if (vertical_pos){
+                        self.cursor.curr_line_width = curr_line_counter -| 1;
+                    }
+
                     line_counter += 1;
                     col_counter = 0;
                 }
@@ -160,6 +172,7 @@ pub const DocumentBuffer = struct {
             iter = node.next;
         }
 
+        self.doc_height = line_counter;
         return buffer;
     }
 
