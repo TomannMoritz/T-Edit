@@ -5,12 +5,13 @@
 
 const std = @import("std");
 
+const CodePoint = @import("codepoint.zig").CodePoint;
+
 const DocumentBuffer = @import("document_buffer.zig").DocumentBuffer;
 const Config = @import("config.zig").Config;
 
 
 const buf_size = 1024;
-const escape_key = 27;
 
 
 pub const Mode = enum {
@@ -23,9 +24,11 @@ pub const Mode = enum {
 pub const DocMode = struct {
     mode : Mode,
 
+
     pub fn is_exit(self: *DocMode) bool {
         return self.mode == Mode.Exit;
     }
+
 
     pub fn input(self: *DocMode, buffer : [buf_size]u8, doc_buffer: *DocumentBuffer, cfg : *const Config) bool {
         const key: u8 = buffer[0];
@@ -36,6 +39,7 @@ pub const DocMode = struct {
             Mode.Exit => return false,
         }
     }
+
 
     fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer, cfg : *const Config) bool {
         var result: bool = false;
@@ -87,18 +91,13 @@ pub const DocMode = struct {
             result = true;
         }
 
-        doc_buffer.cursor.pos_x = clamp(doc_buffer.cursor.pos_x, 0, doc_buffer.cursor.curr_line_width);
-        doc_buffer.cursor.pos_y = clamp(doc_buffer.cursor.pos_y, 0, doc_buffer.doc_height);
         return result;
     }
 
-    fn clamp(value : u32, min_value : u32, max_value : u32) u32 {
-        return @max(min_value, @min(max_value, value));
-    }
 
     fn parse_insert_mode(self: *DocMode, key : u8, doc_buffer: *DocumentBuffer) bool {
         _ = doc_buffer;
-        if (key == escape_key){
+        if (CodePoint.ESCAPE.equal_to(key)){
             self.mode = Mode.Normal;
         }
 

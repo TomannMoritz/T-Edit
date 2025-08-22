@@ -6,6 +6,9 @@ const std = @import("std");
 
 // --------------------------------------------------
 // local imports
+const CodePoint = @import("codepoint.zig").CodePoint;
+const Util = @import("util.zig");
+
 const document_buffer = @import("document_buffer.zig");
 const termios = @import("termios.zig");
 const config = @import("config.zig");
@@ -69,9 +72,16 @@ pub fn main() !void {
             // update display buffer
             @memset(display_data, undefined);
             display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
-            if (display_data[doc_buffer.cursor.display_index] != 10){
-                display_data[doc_buffer.cursor.display_index] = 33;
+
+            // clamp cursor position
+            doc_buffer.cursor.pos_x = Util.clamp(doc_buffer.cursor.pos_x, 0, doc_buffer.cursor.curr_line_width);
+            doc_buffer.cursor.pos_y = Util.clamp(doc_buffer.cursor.pos_y, 0, doc_buffer.doc_height);
+            _ = try doc_buffer.update_cursor_buf(display_data, doc_config);
+
+            if (CodePoint.NEW_LINE.equal_to(display_data[doc_buffer.cursor.display_index])){
+                display_data[doc_buffer.cursor.display_index + 1] = CodePoint.NEW_LINE.get_value();
             }
+            display_data[doc_buffer.cursor.display_index] = CodePoint.CURSOR.get_value();
 
             std.debug.print("MODE: {}\n", .{doc_mode.mode});
             std.debug.print("Cursor: x: {} y: {}\n", .{doc_buffer.cursor.pos_x, doc_buffer.cursor.pos_y});

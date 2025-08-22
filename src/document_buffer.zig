@@ -6,6 +6,8 @@
 const std = @import("std");
 
 
+const CodePoint = @import("codepoint.zig").CodePoint;
+
 const gap_buffer = @import("gap_buffer.zig");
 const config = @import("config.zig");
 
@@ -128,7 +130,7 @@ pub const DocumentBuffer = struct {
             const node_data = node.g_buffer.?.data;
 
             for (node_data) |ele| {
-                if (ele == 0){ continue; }
+                if (CodePoint.NULL.equal_to(ele)){ continue; }
 
                 // cursor position
                 const horizontal_pos = col_counter == self.cursor.pos_x;
@@ -144,13 +146,15 @@ pub const DocumentBuffer = struct {
                     buffer[char_counter] = ele;
                     char_counter += 1;
 
+                    // keep space at eol
+                    if (CodePoint.NEW_LINE.equal_to(ele)){ char_counter += 1;}
                     if (vertical_pos){ curr_line_counter += 1; }
                 }
 
                 // add cut off new lines
                 if (in_vertical_range and !in_horizontal_range){
-                    if (buffer[char_counter -| 1] != 10){
-                        buffer[char_counter] = 10;
+                    if (CodePoint.NEW_LINE.not_equal_to(buffer[char_counter -| 1])){
+                        buffer[char_counter] = CodePoint.NEW_LINE.get_value();
                         char_counter += 1;
                     }
                 }
@@ -158,7 +162,7 @@ pub const DocumentBuffer = struct {
                 col_counter += 1;
 
                 // new line character
-                if (ele == 10){
+                if (CodePoint.NEW_LINE.equal_to(ele)){
                     // limit horizontal position to eol
                     if (vertical_pos){
                         self.cursor.curr_line_width = curr_line_counter -| 1;
