@@ -14,6 +14,7 @@ const config = @import("config.zig");
 
 
 pub const Cursor = struct {
+    v_pos_x : u32,
     pos_x : u32,
     pos_y : u32,
     at_eol : bool,
@@ -49,6 +50,7 @@ pub const DocumentBuffer = struct {
     head : ?*DocumentNode,
     tail : ?*DocumentNode,
     cursor : Cursor,
+    v_pos_x : u32,
     pos_x : u32,
     pos_y : u32,
     doc_height : u32,
@@ -58,12 +60,14 @@ pub const DocumentBuffer = struct {
         doc_buf.head = null;
         doc_buf.tail = null;
         doc_buf.cursor = Cursor{
+            .v_pos_x = 0,
             .pos_x = 0,
             .pos_y = 0,
             .at_eol = false,
             .display_index = 0,
             .curr_line_width = 0,
         };
+        doc_buf.v_pos_x = 0;
         doc_buf.pos_x = 0;
         doc_buf.pos_y = 0;
         doc_buf.doc_height = 0;
@@ -178,9 +182,21 @@ pub const DocumentBuffer = struct {
     }
 
 
+    pub fn update_horizontal(self: *DocumentBuffer, doc_config : *const config.Config) void {
+        const can_jump_further = self.cursor.v_pos_x >= self.cursor.pos_x; 
+        const diff_pos_x = self.cursor.pos_x != self.cursor.v_pos_x;
+
+        if (can_jump_further and diff_pos_x){
+            self.cursor.pos_x = @min(self.cursor.v_pos_x, self.cursor.curr_line_width);
+            self.pos_x = @min(self.v_pos_x, self.cursor.curr_line_width -| doc_config.offset_horizontal);
+        }
+    }
+
+
     pub fn get_buf_data(node : *DocumentNode) ![16]u8 {
         return node.g_buffer.?.data;
     }
+
 
     pub fn print_buffer(self : *DocumentBuffer) !void {
         var doc_iter = self.head;

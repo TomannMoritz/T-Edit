@@ -69,14 +69,20 @@ pub fn main() !void {
         const changed = doc_mode.input(buffer, doc_buffer, &doc_config);
 
         if (changed){
+
             // update display buffer
-            @memset(display_data, undefined);
-            display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
+            // get new line information
+            _ = try doc_buffer.update_cursor_buf(display_data, doc_config);
+            doc_buffer.update_horizontal(&doc_config);
 
             // clamp cursor position
             doc_buffer.cursor.pos_x = Util.clamp(doc_buffer.cursor.pos_x, 0, doc_buffer.cursor.curr_line_width);
             doc_buffer.cursor.pos_y = Util.clamp(doc_buffer.cursor.pos_y, 0, doc_buffer.doc_height);
-            _ = try doc_buffer.update_cursor_buf(display_data, doc_config);
+            mode.DocMode.update_doc_pos_x(doc_buffer, &doc_config);
+
+            // clear memory
+            @memset(display_data, undefined);
+            display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
 
             if (CodePoint.NEW_LINE.equal_to(display_data[doc_buffer.cursor.display_index])){
                 display_data[doc_buffer.cursor.display_index + 1] = CodePoint.NEW_LINE.get_value();
@@ -84,7 +90,7 @@ pub fn main() !void {
             display_data[doc_buffer.cursor.display_index] = CodePoint.CURSOR.get_value();
 
             std.debug.print("MODE: {}\n", .{doc_mode.mode});
-            std.debug.print("Cursor: x: {} y: {}\n", .{doc_buffer.cursor.pos_x, doc_buffer.cursor.pos_y});
+            std.debug.print("Cursor: x: {} y: {} - v_x: {}\n", .{doc_buffer.cursor.pos_x, doc_buffer.cursor.pos_y, doc_buffer.cursor.v_pos_x});
             std.debug.print("Document: height: {} curr line length: {}\n", .{doc_buffer.doc_height, doc_buffer.cursor.curr_line_width});
             display_document(display_data, border);
         }

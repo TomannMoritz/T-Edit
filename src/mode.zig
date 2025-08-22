@@ -63,6 +63,8 @@ pub const DocMode = struct {
             if (doc_buffer.cursor.pos_x < doc_buffer.pos_x + cfg.offset_horizontal){
                 doc_buffer.pos_x = doc_buffer.pos_x -| 1;
             }
+            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+            doc_buffer.v_pos_x = doc_buffer.pos_x;
             result = true;
         }
 
@@ -74,6 +76,8 @@ pub const DocMode = struct {
             if (doc_buffer.pos_x + cfg.text_width < doc_buffer.cursor.pos_x + cfg.offset_horizontal + 1){
                 doc_buffer.pos_x += 1;
             }
+            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+            doc_buffer.v_pos_x = doc_buffer.pos_x;
             result = true;
         }
 
@@ -100,6 +104,14 @@ pub const DocMode = struct {
         }
 
         return result;
+    }
+
+    pub fn update_doc_pos_x(doc_buffer : *DocumentBuffer, doc_config : *const Config) void {
+        if (doc_buffer.pos_x > doc_buffer.cursor.pos_x){
+            const diff = doc_buffer.pos_x -| doc_buffer.cursor.pos_x;
+
+            doc_buffer.pos_x = doc_buffer.pos_x -| diff -| doc_config.offset_horizontal;
+        }
     }
 
 
