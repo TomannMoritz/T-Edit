@@ -120,60 +120,57 @@ pub const DocumentBuffer = struct {
 
         // iterate buffers
         var iter = self.head;
+        var buf_index : u32 = 0;
+
         var line_counter : u32 = 0;
         var col_counter : u32 = 0;
 
-        var char_counter : u32 = 0;
-        var curr_line_counter : u32 = 0;
 
-        while (iter) |node| {
+        while (iter) |node| : (iter = node.next) {
             const node_data = node.g_buffer.?.data;
 
             for (node_data) |ele| {
                 if (CodePoint.NULL.equal_to(ele)){ continue; }
 
+
                 // cursor position
                 const horizontal_pos = col_counter == self.cursor.pos_x;
                 const vertical_pos = line_counter == self.cursor.pos_y;
+
                 if (vertical_pos and horizontal_pos){
-                        self.cursor.display_index = char_counter;
+                        self.cursor.display_index = buf_index;
                 }
 
-                // fill buffer
-                const in_vertical_range = line_counter >= vertical_min and line_counter <= vertical_max;
-                const in_horizontal_range = col_counter >= horizontal_min and col_counter <= horizontal_max;
-                if (in_vertical_range and in_horizontal_range){
-                    buffer[char_counter] = ele;
-                    char_counter += 1;
 
-                    // keep space at eol
-                    if (CodePoint.NEW_LINE.equal_to(ele)){ char_counter += 1;}
-                    if (vertical_pos){ curr_line_counter += 1; }
-                }
-
-                // add cut off new lines
-                if (in_vertical_range and !in_horizontal_range){
-                    if (CodePoint.NEW_LINE.not_equal_to(buffer[char_counter -| 1])){
-                        buffer[char_counter] = CodePoint.NEW_LINE.get_value();
-                        char_counter += 1;
-                    }
-                }
-
-                col_counter += 1;
-
-                // new line character
+                // end of line
                 if (CodePoint.NEW_LINE.equal_to(ele)){
+                    // create space after new line character
+                    buffer[buf_index] = ele;
+                    buf_index += 2;
+
+
                     // limit horizontal position to eol
                     if (vertical_pos){
-                        self.cursor.curr_line_width = curr_line_counter -| 1;
+                        self.cursor.curr_line_width = col_counter;
                     }
 
                     line_counter += 1;
                     col_counter = 0;
+                    continue;
                 }
-            }
 
-            iter = node.next;
+
+                // fill buffer
+                const in_vertical_range = line_counter >= vertical_min and line_counter <= vertical_max;
+                const in_horizontal_range = col_counter >= horizontal_min and col_counter <= horizontal_max;
+
+                if (in_vertical_range and in_horizontal_range){
+                    buffer[buf_index] = ele;
+                    buf_index += 1;
+                }
+
+                col_counter += 1;
+            }
         }
 
         self.doc_height = line_counter;

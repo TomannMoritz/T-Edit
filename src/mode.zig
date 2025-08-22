@@ -59,6 +59,10 @@ pub const DocMode = struct {
         // move left
         if (key == 'h'){
             doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x -| 1;
+
+            if (doc_buffer.cursor.pos_x < doc_buffer.pos_x + cfg.offset_horizontal){
+                doc_buffer.pos_x = doc_buffer.pos_x -| 1;
+            }
             result = true;
         }
 
@@ -66,6 +70,10 @@ pub const DocMode = struct {
         if (key == 'l'){
             const new_pos_x = @min(doc_buffer.cursor.pos_x + 1, doc_buffer.cursor.curr_line_width);
             doc_buffer.cursor.pos_x = new_pos_x;
+
+            if (doc_buffer.pos_x + cfg.text_width < doc_buffer.cursor.pos_x + cfg.offset_horizontal + 1){
+                doc_buffer.pos_x += 1;
+            }
             result = true;
         }
 

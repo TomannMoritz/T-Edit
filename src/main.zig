@@ -144,7 +144,7 @@ fn setup_config() config.Config {
         .text_height = 10,
         .text_width = 25,
         .offset_vertical = 1,
-        .offset_right = 5,
+        .offset_horizontal = 2,
     };
 
     // TODO: implement offsets with cursor movement
