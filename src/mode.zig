@@ -11,8 +11,6 @@ const DocumentBuffer = @import("document_buffer.zig").DocumentBuffer;
 const Config = @import("config.zig").Config;
 
 
-const buf_size = 1024;
-
 
 pub const Mode = enum {
     Normal,
@@ -30,7 +28,8 @@ pub const DocMode = struct {
     }
 
 
-    pub fn input(self: *DocMode, buffer : [buf_size]u8, doc_buffer: *DocumentBuffer, cfg : *const Config) bool {
+    pub fn input(self: *DocMode, buffer : []u8, doc_buffer: *DocumentBuffer, cfg : *const Config) bool {
+        // TODO: evaluate further inputs
         const key: u8 = buffer[0];
 
         switch (self.mode){
@@ -117,7 +116,7 @@ pub const DocMode = struct {
 
     fn parse_insert_mode(self: *DocMode, key : u8, doc_buffer: *DocumentBuffer) bool {
         _ = doc_buffer;
-        if (CodePoint.ESCAPE.equal_to(key)){
+        if (@intFromEnum(CodePoint.ESCAPE) == key){
             self.mode = Mode.Normal;
         }
 

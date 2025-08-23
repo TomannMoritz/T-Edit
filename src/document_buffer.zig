@@ -134,7 +134,7 @@ pub const DocumentBuffer = struct {
             const node_data = node.g_buffer.?.data;
 
             for (node_data) |ele| {
-                if (CodePoint.NULL.equal_to(ele)){ continue; }
+                if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
 
 
                 // cursor position
@@ -147,7 +147,7 @@ pub const DocumentBuffer = struct {
 
 
                 // end of line
-                if (CodePoint.NEW_LINE.equal_to(ele)){
+                if (@intFromEnum(CodePoint.NEW_LINE) == ele){
                     // create space after new line character
                     buffer[buf_index] = ele;
                     buf_index += 2;

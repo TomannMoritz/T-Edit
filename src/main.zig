@@ -16,61 +16,55 @@ const mode = @import("mode.zig");
 
 // --------------------------------------------------
 const buf_size = 8;
+const display_buf_size = 512;
+const stdin_buf_size = 8;
+
+const border_char = '-';
 
 
 // --------------------------------------------------
 pub fn main() !void {
-    std.debug.print("Main:\n", .{});
-
     // create allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
+    // setup configuration
+    const doc_config = setup_config();
+    var doc_mode = mode.DocMode{.mode = mode.Mode.Normal};
 
+    // Allocations
     // parse and save file data
     const file = try parse_arguments();
     var doc_buffer = try setup_document(allocator, file);
     defer _ = doc_buffer.deinit(allocator);
 
-    // try doc_buffer.print_buffer();
-
-
-    // setup configuration
-    const doc_config = setup_config();
-
-
     // allocate display buffer
-    var display_data = try allocator.alloc(u8, 512);
+    var display_data = try allocator.alloc(u8, display_buf_size);
     defer allocator.free(display_data);
-
-
-    // termios
-    try termios.set_raw_mode();
-
-    var buffer: [1024]u8 = undefined;
-    const stdin: std.fs.File = std.fs.File.stdin();
-
-    var doc_mode = mode.DocMode{.mode = mode.Mode.Normal};
 
     const border = try allocator.alloc(u8, doc_config.text_width);
     defer allocator.free(border);
-
-    @memset(border, '-');
+    @memset(border, border_char);
 
     // first view
     display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
-    display_data[doc_buffer.cursor.display_index] = 33;
+    display_data[doc_buffer.cursor.display_index] = @intFromEnum(CodePoint.CURSOR);
     display_document(display_data, border);
 
+
+    // input
+    const stdin: std.fs.File = std.fs.File.stdin();
+    var stdin_buf: [stdin_buf_size]u8 = undefined;
+
+    try termios.set_raw_mode();
+
     while (true){
-        _ = try stdin.read(&buffer);
+        _ = try stdin.read(&stdin_buf);
+        const data_changed = doc_mode.input(&stdin_buf, doc_buffer, &doc_config);
 
-        const changed = doc_mode.input(buffer, doc_buffer, &doc_config);
-
-        if (changed){
-
-            // update display buffer
+        // update display
+        if (data_changed){
             // get new line information
             _ = try doc_buffer.update_cursor_buf(display_data, doc_config);
             doc_buffer.update_horizontal(&doc_config);
@@ -84,10 +78,12 @@ pub fn main() !void {
             @memset(display_data, undefined);
             display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
 
-            if (CodePoint.NEW_LINE.equal_to(display_data[doc_buffer.cursor.display_index])){
-                display_data[doc_buffer.cursor.display_index + 1] = CodePoint.NEW_LINE.get_value();
+            const cursor_index = doc_buffer.cursor.display_index;
+            const cursor_char : u8 = display_data[cursor_index];
+            if (@intFromEnum(CodePoint.NEW_LINE) == cursor_char){
+                display_data[cursor_index + 1] = @intFromEnum(CodePoint.NEW_LINE);
             }
-            display_data[doc_buffer.cursor.display_index] = CodePoint.CURSOR.get_value();
+            display_data[cursor_index] = @intFromEnum(CodePoint.CURSOR);
 
             std.debug.print("MODE: {}\n", .{doc_mode.mode});
             std.debug.print("Cursor: x: {} y: {} - v_x: {}\n", .{doc_buffer.cursor.pos_x, doc_buffer.cursor.pos_y, doc_buffer.cursor.v_pos_x});
