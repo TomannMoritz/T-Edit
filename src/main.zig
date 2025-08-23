@@ -50,7 +50,7 @@ pub fn main() !void {
     // first view
     display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
     display_data[doc_buffer.cursor.display_index] = @intFromEnum(CodePoint.CURSOR);
-    display_document(display_data, border);
+    display_document(display_data, border, doc_buffer, &doc_mode);
 
 
     // input
@@ -85,10 +85,9 @@ pub fn main() !void {
             }
             display_data[cursor_index] = @intFromEnum(CodePoint.CURSOR);
 
-            std.debug.print("MODE: {}\n", .{doc_mode.mode});
-            std.debug.print("Cursor: x: {} y: {} - v_x: {}\n", .{doc_buffer.cursor.pos_x, doc_buffer.cursor.pos_y, doc_buffer.cursor.v_pos_x});
-            std.debug.print("Document: height: {} curr line length: {}\n", .{doc_buffer.doc_height, doc_buffer.cursor.curr_line_width});
-            display_document(display_data, border);
+            const num_lines : u8 = doc_config.text_height + 5;
+            clear_screen(num_lines);
+            display_document(display_data, border, doc_buffer, &doc_mode);
         }
 
         if (doc_mode.is_exit()){ break; }
@@ -99,7 +98,19 @@ pub fn main() !void {
 }
 
 
-fn display_document(display_data : []u8, border : []const u8) void{
+fn clear_screen(num_lines : u8) void {
+    const ANSI_CURSOR_UP = 'A';
+    const ANSI_ERASE_END_OF_SCREEN = "0J";
+
+    std.debug.print("{u}[{d}{c}", .{@intFromEnum(CodePoint.ESCAPE), num_lines, ANSI_CURSOR_UP});
+    std.debug.print("{u}[{s}", .{@intFromEnum(CodePoint.ESCAPE), ANSI_ERASE_END_OF_SCREEN});
+}
+
+
+fn display_document(display_data : []u8, border : []const u8, doc_buffer : *document_buffer.DocumentBuffer, doc_mode : *const mode.DocMode) void{
+    std.debug.print("Mode: {}\n", .{doc_mode.mode});
+    std.debug.print("Cursor: x: {} y: {} - v_x: {}\n", .{doc_buffer.cursor.pos_x, doc_buffer.cursor.pos_y, doc_buffer.cursor.v_pos_x});
+    std.debug.print("Document: height: {} curr line length: {}\n", .{doc_buffer.doc_height, doc_buffer.cursor.curr_line_width});
     std.debug.print("{s}", .{border});
     std.debug.print("\n{s}\n", .{display_data});
     std.debug.print("{s}\n", .{border});
