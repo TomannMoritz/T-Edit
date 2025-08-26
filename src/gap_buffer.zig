@@ -94,6 +94,7 @@ pub const GapBuffer = struct {
 
         var deleted_data: [buf_size]u8 = undefined;
         @memmove(deleted_data[0..self.p_start - new_start], self.data[new_start..self.p_start]);
+        @memset(self.data[new_start..self.p_start], undefined);
 
         self.p_start = new_start;
         return deleted_data;
@@ -106,6 +107,7 @@ pub const GapBuffer = struct {
 
         var delete_data : [buf_size]u8 = undefined;
         @memmove(delete_data[0..new_end-self.p_end], self.data[self.p_end+1..new_end+1]);
+        @memset(self.data[self.p_end+1..new_end+1], undefined);
 
         self.p_end = new_end;
         return delete_data;
@@ -175,6 +177,11 @@ test "delete left data" {
     const start_part = start_data[g_buffer.p_start..start_position];
     const del_part = del_data[0..del_pos];
     try testing.expect(std.mem.eql(u8, start_part, del_part));
+
+    // check invalid data
+    const inv_data = g_buffer.data[g_buffer.p_start..start_position];
+    const inv_mem : [del_pos]u8 = undefined;
+    try testing.expect(std.mem.eql(u8, inv_data, &inv_mem));
 }
 
 
@@ -199,4 +206,9 @@ test "delete right data" {
     const start_part = start_data[end_position+1..g_buffer.p_end+1];
     const del_part = del_data[0..del_pos];
     try testing.expect(std.mem.eql(u8, start_part, del_part));
+
+    // check invalid data
+    const inv_data = g_buffer.data[end_position+1..g_buffer.p_end+1];
+    const inv_mem : [del_pos]u8 = undefined;
+    try testing.expect(std.mem.eql(u8, inv_data, &inv_mem));
 }
