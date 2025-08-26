@@ -87,6 +87,31 @@ pub const GapBuffer = struct {
             self.p_end += diff;
         }
     }
+
+    // Delete characters
+    pub fn delete_left(self: *GapBuffer, pos: u32) [buf_size]u8 {
+        const new_start = self.p_start -| pos;
+
+        var deleted_data: [buf_size]u8 = undefined;
+        @memmove(deleted_data[0..self.p_start - new_start], self.data[new_start..self.p_start]);
+
+        self.p_start = new_start;
+        return deleted_data;
+    }
+
+    pub fn delete_right(self: *GapBuffer, pos: u32) [buf_size]u8 {
+        // p_end: points at the last gap character (invalid character)
+        // valid characters after the next position
+        const new_end = @min(self.p_end + pos, buf_size - 1 - 1);
+
+        var delete_data : [buf_size]u8 = undefined;
+        @memmove(delete_data[0..new_end-self.p_end], self.data[self.p_end+1..new_end+1]);
+
+        self.p_end = new_end;
+        return delete_data;
+    }
+
+    // TODO: Insert characters
 };
 
 
@@ -132,3 +157,46 @@ test "move_buffer left/right" {
 }
 
 
+test "delete left data" {
+    var g_buffer = try test_setup();
+
+    const start_position = g_buffer.p_start;
+    const start_data = g_buffer.data;
+
+
+    // delete left
+    const del_pos = 2;
+    const del_data: [buf_size]u8 = g_buffer.delete_left(del_pos);
+
+    try testing.expectEqual(buf_size, g_buffer.data.len);
+    try testing.expectEqual(start_position, g_buffer.p_start + del_pos);
+
+    // check deleted data
+    const start_part = start_data[g_buffer.p_start..start_position];
+    const del_part = del_data[0..del_pos];
+    try testing.expect(std.mem.eql(u8, start_part, del_part));
+}
+
+
+test "delete right data" {
+    var g_buffer = try test_setup();
+
+    // move left
+    try g_buffer.move_buffer(0);
+
+    const end_position = g_buffer.p_end;
+    const start_data = g_buffer.data;
+
+
+    // delete right
+    const del_pos = 3;
+    const del_data: [buf_size]u8 = g_buffer.delete_right(del_pos);
+
+    try testing.expectEqual(buf_size, g_buffer.data.len);
+    try testing.expectEqual(end_position + del_pos, g_buffer.p_end);
+
+    // check deleted data
+    const start_part = start_data[end_position+1..g_buffer.p_end+1];
+    const del_part = del_data[0..del_pos];
+    try testing.expect(std.mem.eql(u8, start_part, del_part));
+}
