@@ -39,13 +39,16 @@ pub fn main() !void {
     var doc_buffer = try setup_document(allocator, file);
     defer _ = doc_buffer.deinit(allocator);
 
+
     // allocate display buffer
     var display_data = try allocator.alloc(u8, display_buf_size);
     defer allocator.free(display_data);
+    @memset(display_data, @intFromEnum(CodePoint.NULL));
 
     const border = try allocator.alloc(u8, doc_config.text_width);
     defer allocator.free(border);
     @memset(border, border_char);
+
 
     // first view
     display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
@@ -75,7 +78,7 @@ pub fn main() !void {
             mode.DocMode.update_doc_pos_x(doc_buffer, &doc_config);
 
             // clear memory
-            @memset(display_data, undefined);
+            @memset(display_data, @intFromEnum(CodePoint.NULL));
             display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
 
             const cursor_index = doc_buffer.cursor.display_index;

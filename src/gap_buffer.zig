@@ -53,8 +53,8 @@ pub const GapBuffer = struct {
     }
 
     pub fn move_buffer(self: *GapBuffer, new_index: u32) !void {
-        if (new_index < 0){ return error.NegativeIndex; }
-        if (new_index > self.get_num_elements()) { return error.OverflowIndex; }
+        if (new_index < 0){ return error.IndexUnderflow; }
+        if (new_index > self.get_num_elements()) { return error.IndexOverflow; }
         if (self.p_start == new_index){ return; }
 
         const gap_width = self.p_end + 1 - self.p_start;
@@ -92,8 +92,8 @@ pub const GapBuffer = struct {
     }
 
     // Delete characters
-    pub fn delete_left(self: *GapBuffer, pos: u32) [buf_size]u8 {
-        const new_start = self.p_start -| pos;
+    pub fn delete_left(self: *GapBuffer, num_ele: u32) [buf_size]u8 {
+        const new_start = self.p_start -| num_ele;
 
         var deleted_data: [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
         @memmove(deleted_data[0..self.p_start - new_start], self.data[new_start..self.p_start]);
@@ -103,10 +103,10 @@ pub const GapBuffer = struct {
         return deleted_data;
     }
 
-    pub fn delete_right(self: *GapBuffer, pos: u32) [buf_size]u8 {
+    pub fn delete_right(self: *GapBuffer, num_ele: u32) [buf_size]u8 {
         // p_end: points at the last gap character (invalid character)
         // valid characters after the next position
-        const new_end = @min(self.p_end + pos, buf_size - 1 - 1);
+        const new_end = @min(self.p_end + num_ele, buf_size - 1 - 1);
 
         var delete_data : [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
         @memmove(delete_data[0..new_end-self.p_end], self.data[self.p_end+1..new_end+1]);
