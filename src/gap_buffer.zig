@@ -93,10 +93,11 @@ pub const GapBuffer = struct {
 
     // Delete characters
     pub fn delete_left(self: *GapBuffer, num_ele: u32) [buf_size]u8 {
-        const new_start = self.p_start -| num_ele;
+        const new_start : u32 = self.p_start -| num_ele;
+        const diff_ele : u32 = self.p_start - new_start;
 
         var deleted_data: [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
-        @memmove(deleted_data[0..self.p_start - new_start], self.data[new_start..self.p_start]);
+        @memmove(deleted_data[0..diff_ele], self.data[new_start..self.p_start]);
         @memset(self.data[new_start..self.p_start], @intFromEnum(CodePoint.NULL));
 
         self.p_start = new_start;
@@ -104,12 +105,11 @@ pub const GapBuffer = struct {
     }
 
     pub fn delete_right(self: *GapBuffer, num_ele: u32) [buf_size]u8 {
-        // p_end: points at the last gap character (invalid character)
-        // valid characters after the next position
-        const new_end = @min(self.p_end + num_ele, buf_size - 1 - 1);
+        const new_end : u32 = @min(self.p_end + num_ele, buf_size - 1);
+        const diff_ele : u32 = new_end - self.p_end;
 
         var delete_data : [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
-        @memmove(delete_data[0..new_end-self.p_end], self.data[self.p_end+1..new_end+1]);
+        @memmove(delete_data[0..diff_ele], self.data[self.p_end+1..new_end+1]);
         @memset(self.data[self.p_end+1..new_end+1], @intFromEnum(CodePoint.NULL));
 
         self.p_end = new_end;

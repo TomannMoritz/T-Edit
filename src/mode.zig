@@ -50,6 +50,38 @@ pub const DocMode = struct {
             self.mode = Mode.Exit;
         }
 
+
+        // delete characters
+        // delete under cursor
+        if (key == 'x'){
+            if (doc_buffer.delete_right(1)) |_| {
+            }else |err| {
+                std.debug.print("ERROR: {any}\n", .{err});
+            }
+            result = true;
+        }
+
+        // delete left of cursor
+        // special case:
+        //      the cursor can be at the first character in the current buffer
+        //      as a result a previous buffer with characters is required
+        //  => move cursor left and delete towards the right side
+        //  => additionally the cursor is already at the correct position
+        if (key == 'X'){
+            const pos_x_before : u32 = doc_buffer.cursor.pos_x;
+            const new_key = 'h';
+            _ = parse_normal_mode(self, new_key, doc_buffer, cfg);
+            const pos_x_after : u32 = doc_buffer.cursor.pos_x;
+
+            if (pos_x_before == pos_x_after){ return false; }
+
+            if (doc_buffer.delete_right(1)) |_| {
+            }else |err| {
+                std.debug.print("ERROR: {any}\n", .{err});
+            }
+            result = true;
+        }
+
         // insert mode
         if (key == 'i'){
             self.mode = Mode.Insert;

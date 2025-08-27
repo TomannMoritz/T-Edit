@@ -54,6 +54,7 @@ pub const DocumentBuffer = struct {
     pos_x : u32,
     pos_y : u32,
     doc_height : u32,
+    buf_index : u32,
 
     pub fn create(allocator : std.mem.Allocator) !*DocumentBuffer {
         const doc_buf = try allocator.create(DocumentBuffer);
@@ -71,6 +72,7 @@ pub const DocumentBuffer = struct {
         doc_buf.pos_x = 0;
         doc_buf.pos_y = 0;
         doc_buf.doc_height = 0;
+        doc_buf.buf_index = 0;
 
         return doc_buf;
     }
@@ -114,6 +116,8 @@ pub const DocumentBuffer = struct {
         return new_node;
     }
 
+
+    // TODO: proper fast implementation
     pub fn update_cursor_buf(self: *DocumentBuffer, buffer : []u8, cfg : config.Config) ![]u8 {
         // configuration
         const vertical_min = self.pos_y;
@@ -142,7 +146,7 @@ pub const DocumentBuffer = struct {
                 const vertical_pos = line_counter == self.cursor.pos_y;
 
                 if (vertical_pos and horizontal_pos){
-                        self.cursor.display_index = buf_index;
+                    self.cursor.display_index = buf_index;
                 }
 
 
@@ -182,6 +186,38 @@ pub const DocumentBuffer = struct {
     }
 
 
+    pub fn get_buf_cursor(self: *DocumentBuffer) !*DocumentNode {
+        var line_counter : u32 = 0;
+        var col_counter : u32 = 0;
+
+        var iter = self.head;
+
+        while (iter) |node| : (iter = node.next){
+            const node_data = node.g_buffer.?.data;
+
+            var buf_counter : u32 = 0;
+            for (node_data) |ele| {
+                if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
+
+                const horizontal_pos = col_counter == self.cursor.pos_x;
+                const vertical_pos = line_counter == self.cursor.pos_y;
+                if (horizontal_pos and vertical_pos){
+                    self.buf_index = buf_counter;
+                    return node;
+                }
+
+                col_counter += 1;
+
+                if (@intFromEnum(CodePoint.NEW_LINE) == ele){
+                    line_counter += 1;
+                    col_counter = 0;
+                }
+                buf_counter += 1;
+            }
+        }
+        return error.OutOfBounds;
+    }
+
     pub fn update_horizontal(self: *DocumentBuffer, doc_config : *const config.Config) void {
         const can_jump_further = self.cursor.v_pos_x >= self.cursor.pos_x; 
         const diff_pos_x = self.cursor.pos_x != self.cursor.v_pos_x;
@@ -189,6 +225,30 @@ pub const DocumentBuffer = struct {
         if (can_jump_further and diff_pos_x){
             self.cursor.pos_x = @min(self.cursor.v_pos_x, self.cursor.curr_line_width);
             self.pos_x = @min(self.v_pos_x, self.cursor.curr_line_width -| doc_config.offset_horizontal);
+        }
+    }
+
+
+    pub fn delete_right(self: *DocumentBuffer, num_char: u32) !void {
+        const cursor_node = try self.get_buf_cursor();
+        var deleted_char : u32 = 0;
+
+        var iter : ?*DocumentNode = cursor_node;
+        while (iter) |node| : (iter = node.next){
+            const num_ele = node.g_buffer.?.get_num_elements();
+
+            // move cursor to position
+            try node.g_buffer.?.move_buffer(self.buf_index);
+
+            const delete_char_right = num_char -| deleted_char;
+            _ = node.g_buffer.?.delete_right(delete_char_right);
+
+
+            const num_del = num_ele - node.g_buffer.?.get_num_elements();
+            deleted_char += num_del;
+            if (deleted_char >= num_char){
+                break;
+            }
         }
     }
 
