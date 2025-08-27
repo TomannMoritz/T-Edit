@@ -8,13 +8,16 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 
+const CodePoint = @import("codepoint.zig").CodePoint;
+
+
 // --------------------------------------------------
 const buf_size: u32 = 16;
 
 
 // --------------------------------------------------
 pub const GapBuffer = struct {
-    data: [buf_size]u8 = undefined,
+    data: [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size,
     p_start: u32 = 0,
     p_end: u32 = buf_size - 1,
 
@@ -64,7 +67,7 @@ pub const GapBuffer = struct {
             @memmove(self.data[self.p_end + 1 - diff .. self.p_end + 1], self.data[self.p_start - diff .. self.p_start]);
 
             // overwrite old data
-            @memset(self.data[new_index .. new_index + gap_width], undefined);
+            @memset(self.data[new_index .. new_index + gap_width], @intFromEnum(CodePoint.NULL));
 
             // update pointers
             self.p_start -= diff;
@@ -80,7 +83,7 @@ pub const GapBuffer = struct {
             @memmove(self.data[self.p_start .. self.p_start + diff], self.data[self.p_end + 1 .. self.p_end + 1 + diff]);
 
             // overwrite old data
-            @memset(self.data[new_index .. new_index + gap_width], undefined);
+            @memset(self.data[new_index .. new_index + gap_width], @intFromEnum(CodePoint.NULL));
 
             // update pointers
             self.p_start += diff;
@@ -92,9 +95,9 @@ pub const GapBuffer = struct {
     pub fn delete_left(self: *GapBuffer, pos: u32) [buf_size]u8 {
         const new_start = self.p_start -| pos;
 
-        var deleted_data: [buf_size]u8 = undefined;
+        var deleted_data: [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
         @memmove(deleted_data[0..self.p_start - new_start], self.data[new_start..self.p_start]);
-        @memset(self.data[new_start..self.p_start], undefined);
+        @memset(self.data[new_start..self.p_start], @intFromEnum(CodePoint.NULL));
 
         self.p_start = new_start;
         return deleted_data;
@@ -105,9 +108,9 @@ pub const GapBuffer = struct {
         // valid characters after the next position
         const new_end = @min(self.p_end + pos, buf_size - 1 - 1);
 
-        var delete_data : [buf_size]u8 = undefined;
+        var delete_data : [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
         @memmove(delete_data[0..new_end-self.p_end], self.data[self.p_end+1..new_end+1]);
-        @memset(self.data[self.p_end+1..new_end+1], undefined);
+        @memset(self.data[self.p_end+1..new_end+1], @intFromEnum(CodePoint.NULL));
 
         self.p_end = new_end;
         return delete_data;
@@ -180,7 +183,7 @@ test "delete left data" {
 
     // check invalid data
     const inv_data = g_buffer.data[g_buffer.p_start..start_position];
-    const inv_mem : [del_pos]u8 = undefined;
+    const inv_mem : [del_pos]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** del_pos;
     try testing.expect(std.mem.eql(u8, inv_data, &inv_mem));
 }
 
@@ -209,6 +212,8 @@ test "delete right data" {
 
     // check invalid data
     const inv_data = g_buffer.data[end_position+1..g_buffer.p_end+1];
-    const inv_mem : [del_pos]u8 = undefined;
+    const inv_mem : [del_pos]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** del_pos;
     try testing.expect(std.mem.eql(u8, inv_data, &inv_mem));
 }
+
+
