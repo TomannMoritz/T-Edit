@@ -15,7 +15,6 @@ const config = @import("config.zig");
 const mode = @import("mode.zig");
 
 // --------------------------------------------------
-const buf_size = 8;
 const display_buf_size = 512;
 const stdin_buf_size = 8;
 
@@ -142,7 +141,7 @@ fn setup_document(allocator : std.mem.Allocator, file : std.fs.File) !*document_
 
     // save file data
     while (true) {
-        var buf: [buf_size]u8 = undefined;
+        var buf: [document_buffer.init_size]u8 = undefined;
         const bytes_read = try file.read(&buf);
 
         if (bytes_read == 0){ break; }
@@ -162,8 +161,6 @@ fn setup_config() config.Config {
         .offset_vertical = 1,
         .offset_horizontal = 2,
     };
-
-    // TODO: implement offsets with cursor movement
 
     return doc_config;
 }

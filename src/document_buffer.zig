@@ -12,6 +12,8 @@ const gap_buffer = @import("gap_buffer.zig");
 const config = @import("config.zig");
 
 
+pub const init_size = gap_buffer.buf_size / 2;
+
 
 pub const Cursor = struct {
     v_pos_x : u32,

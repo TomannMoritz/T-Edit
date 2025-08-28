@@ -12,7 +12,7 @@ const CodePoint = @import("codepoint.zig").CodePoint;
 
 
 // --------------------------------------------------
-const buf_size: u32 = 16;
+pub const buf_size: u32 = 16;
 
 
 // --------------------------------------------------
@@ -22,7 +22,9 @@ pub const GapBuffer = struct {
     p_end: u32 = buf_size - 1,
 
     pub fn init(self: *GapBuffer, new_data: []const u8) !void {
-        if (self.data.len < new_data.len){ return error.OutOfBounds; }
+        // force max half full buffer initialization
+        // to keep space for insertion/deletion operations
+        if (new_data.len > buf_size / 2){ return error.OutOfBounds; }
 
         @memcpy(self.data[0..new_data.len], new_data[0..]);
         self.p_start = @intCast(new_data.len);
