@@ -116,7 +116,24 @@ pub const GapBuffer = struct {
         return delete_data;
     }
 
-    // TODO: Insert characters
+    // TODO: get/delete second part/half
+
+    // Insert characters
+    pub fn insert_data(self: *GapBuffer, data: []const u8) []const u8 {
+        // The current implementation keeps one space occupied for the gap buffer pointers.
+        // Therefore the buffer capacity is: buf_size - 1
+
+        const empty_space = self.p_end - self.p_start;
+        const insert_ele = @min(empty_space, data.len);
+
+        if (insert_ele == 0){ return &[_]u8{}; }
+
+        const after_start_pos = self.p_start + insert_ele;
+        @memmove(self.data[self.p_start .. after_start_pos], data[0..insert_ele]);
+        self.p_start = after_start_pos;
+
+        return data[0..insert_ele];
+    }
 };
 
 
@@ -214,6 +231,34 @@ test "delete right data" {
     const inv_data = g_buffer.data[end_position+1..g_buffer.p_end+1];
     const inv_mem : [del_pos]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** del_pos;
     try testing.expect(std.mem.eql(u8, inv_data, &inv_mem));
+}
+
+
+test "insert data" {
+    var g_buffer = try test_setup();
+
+    // move left
+    try g_buffer.move_buffer(0);
+
+    const insert_data: [3]u8 = [_]u8{3,4,5};
+    const result = g_buffer.insert_data(&insert_data);
+
+    try testing.expect(std.mem.eql(u8, result[0..], insert_data[0..]));
+    try testing.expect(std.mem.eql(u8, g_buffer.data[0..insert_data.len], &insert_data));
+}
+
+
+test "insert data overflow" {
+    var g_buffer = try test_setup();
+
+    // move left
+    try g_buffer.move_buffer(0);
+
+    const insert_data: [buf_size]u8 = [_]u8{3} ** buf_size;
+    const result = g_buffer.insert_data(&insert_data);
+
+    try testing.expect(std.mem.eql(u8, result[0..], insert_data[0..result.len]));
+    try testing.expect(std.mem.eql(u8, g_buffer.data[0..result.len], insert_data[0..result.len]));
 }
 
 
