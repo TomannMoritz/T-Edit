@@ -11,13 +11,33 @@ const DocumentBuffer = @import("document_buffer.zig").DocumentBuffer;
 const Config = @import("config.zig").Config;
 
 
+pub const Key = enum(u8){
+    // special
+    QUIT = 'q',
+
+    // movement
+    MOVE_LINE_DOWN = 'j',
+    MOVE_LINE_UP = 'k',
+    MOVE_RIGHT = 'l',
+    MOVE_LEFT = 'h',
+
+    // deletion
+    REMOVE_BEFORE_CURSOR = 'X',
+    REMOVE_UNDER_CURSOR = 'x',
+
+    // insertion
+    INSERT_UNDER_CURSOR = 'i',
+};
+
 
 pub const Mode = enum {
     Normal,
     Insert,
     Exit,
 
+    // TODO: command mode (save & quit)
 };
+
 
 pub const DocMode = struct {
     mode : Mode,
@@ -41,24 +61,79 @@ pub const DocMode = struct {
 
 
     fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer, cfg : *const Config) bool {
-        var result: bool = false;
+        var update_buffer: bool = false;
         const ver_offset : u32 = cfg.offset_vertical;
         const ver_height : u32 = @min(doc_buffer.doc_height, cfg.text_height);
 
+
+        // --------------------------------------------------
+        // special
         // quit
-        if (key == 'q'){
+        if (key == @intFromEnum(Key.QUIT)){
             self.mode = Mode.Exit;
+            return false;
         }
 
 
+        // --------------------------------------------------
+        // movement
+        // move left
+        if (key == @intFromEnum(Key.MOVE_LEFT)){
+            doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x -| 1;
+
+            if (doc_buffer.cursor.pos_x < doc_buffer.pos_x + cfg.offset_horizontal){
+                doc_buffer.pos_x = doc_buffer.pos_x -| 1;
+            }
+            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+            doc_buffer.v_pos_x = doc_buffer.pos_x;
+            update_buffer = true;
+        }
+
+        // move right
+        if (key == @intFromEnum(Key.MOVE_RIGHT)){
+            const new_pos_x = @min(doc_buffer.cursor.pos_x + 1, doc_buffer.cursor.curr_line_width);
+            doc_buffer.cursor.pos_x = new_pos_x;
+
+            if (doc_buffer.pos_x + cfg.text_width < doc_buffer.cursor.pos_x + cfg.offset_horizontal + 1){
+                doc_buffer.pos_x += 1;
+            }
+            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+            doc_buffer.v_pos_x = doc_buffer.pos_x;
+            update_buffer = true;
+        }
+
+        // move up
+        if (key == @intFromEnum(Key.MOVE_LINE_UP)){
+            doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y -| 1;
+
+            // move document up
+            if (doc_buffer.cursor.pos_y < doc_buffer.pos_y + ver_offset){
+                doc_buffer.pos_y = doc_buffer.pos_y -| 1;
+            }
+            update_buffer = true;
+        }
+
+        // move down
+        if (key == @intFromEnum(Key.MOVE_LINE_DOWN)){
+            doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y +| 1;
+
+            // move document down
+            if (doc_buffer.cursor.pos_y + ver_offset + 1 > doc_buffer.pos_y + ver_height and doc_buffer.pos_y + ver_height < doc_buffer.doc_height){
+                doc_buffer.pos_y = doc_buffer.pos_y +| 1;
+            }
+            update_buffer = true;
+        }
+
+
+        // --------------------------------------------------
         // delete characters
         // delete under cursor
-        if (key == 'x'){
+        if (key == @intFromEnum(Key.REMOVE_UNDER_CURSOR)){
             if (doc_buffer.delete_right(1)) |_| {
             }else |err| {
                 std.debug.print("ERROR: {any}\n", .{err});
             }
-            result = true;
+            update_buffer = true;
         }
 
         // delete left of cursor
@@ -67,9 +142,9 @@ pub const DocMode = struct {
         //      as a result a previous buffer with characters is required
         //  => move cursor left and delete towards the right side
         //  => additionally the cursor is already at the correct position
-        if (key == 'X'){
+        if (key == @intFromEnum(Key.REMOVE_BEFORE_CURSOR)){
             const pos_x_before : u32 = doc_buffer.cursor.pos_x;
-            const new_key = 'h';
+            const new_key : u8 = @intFromEnum(Key.MOVE_LEFT);
             _ = parse_normal_mode(self, new_key, doc_buffer, cfg);
             const pos_x_after : u32 = doc_buffer.cursor.pos_x;
 
@@ -79,63 +154,19 @@ pub const DocMode = struct {
             }else |err| {
                 std.debug.print("ERROR: {any}\n", .{err});
             }
-            result = true;
+            update_buffer = true;
         }
 
+
+        // --------------------------------------------------
         // insert mode
-        if (key == 'i'){
+        if (key == @intFromEnum(Key.INSERT_UNDER_CURSOR)){
             self.mode = Mode.Insert;
         }
 
-        // move left
-        if (key == 'h'){
-            doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x -| 1;
-
-            if (doc_buffer.cursor.pos_x < doc_buffer.pos_x + cfg.offset_horizontal){
-                doc_buffer.pos_x = doc_buffer.pos_x -| 1;
-            }
-            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
-            doc_buffer.v_pos_x = doc_buffer.pos_x;
-            result = true;
-        }
-
-        // move right
-        if (key == 'l'){
-            const new_pos_x = @min(doc_buffer.cursor.pos_x + 1, doc_buffer.cursor.curr_line_width);
-            doc_buffer.cursor.pos_x = new_pos_x;
-
-            if (doc_buffer.pos_x + cfg.text_width < doc_buffer.cursor.pos_x + cfg.offset_horizontal + 1){
-                doc_buffer.pos_x += 1;
-            }
-            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
-            doc_buffer.v_pos_x = doc_buffer.pos_x;
-            result = true;
-        }
-
-        // move up
-        if (key == 'k'){
-            doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y -| 1;
-
-            // move document up
-            if (doc_buffer.cursor.pos_y < doc_buffer.pos_y + ver_offset){
-                doc_buffer.pos_y = doc_buffer.pos_y -| 1;
-            }
-            result = true;
-        }
-
-        // move down
-        if (key == 'j'){
-            doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y +| 1;
-
-            // move document down
-            if (doc_buffer.cursor.pos_y + ver_offset + 1 > doc_buffer.pos_y + ver_height and doc_buffer.pos_y + ver_height < doc_buffer.doc_height){
-                doc_buffer.pos_y = doc_buffer.pos_y +| 1;
-            }
-            result = true;
-        }
-
-        return result;
+        return update_buffer;
     }
+
 
     pub fn update_doc_pos_x(doc_buffer : *DocumentBuffer, doc_config : *const Config) void {
         if (doc_buffer.pos_x > doc_buffer.cursor.pos_x){
@@ -148,7 +179,7 @@ pub const DocMode = struct {
 
     fn parse_insert_mode(self: *DocMode, key : u8, doc_buffer: *DocumentBuffer) bool {
         _ = doc_buffer;
-        if (@intFromEnum(CodePoint.ESCAPE) == key){
+        if (key == @intFromEnum(CodePoint.ESCAPE)){
             self.mode = Mode.Normal;
         }
 
