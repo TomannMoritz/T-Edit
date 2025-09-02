@@ -118,7 +118,19 @@ pub const GapBuffer = struct {
         return delete_data;
     }
 
-    // TODO: get/delete second part/half
+    pub fn delete_second_half(self: *GapBuffer) ![buf_size/2]u8 {
+        var del_data : [buf_size / 2]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** (buf_size / 2);
+
+        try self.move_buffer(buf_size / 2);
+
+        const num_ele: u32 = self.get_num_elements() - buf_size / 2;
+
+        @memcpy(del_data[0..num_ele], self.data[self.p_end + 1 .. self.p_end + 1 + num_ele]);
+        @memset(self.data[self.p_end + 1 .. self.p_end + 1 + num_ele], @intFromEnum(CodePoint.NULL));
+        self.p_end = self.p_end + num_ele;
+
+        return del_data;
+    }
 
     // Insert characters
     pub fn insert_data(self: *GapBuffer, data: []const u8) []const u8 {
@@ -147,7 +159,7 @@ const testing = std.testing;
 
 
 fn test_setup() !GapBuffer {
-    const my_data = [_]u8{0, 1, 2, 3, 4, 5, 6, 7};
+    const my_data = [_]u8{1, 2, 3, 4, 5, 6, 7, 8};
 
     var g_buffer = GapBuffer{};
     try g_buffer.init(my_data[0..]);
@@ -261,6 +273,31 @@ test "insert data overflow" {
 
     try testing.expect(std.mem.eql(u8, result[0..], insert_data[0..result.len]));
     try testing.expect(std.mem.eql(u8, g_buffer.data[0..result.len], insert_data[0..result.len]));
+    try testing.expectEqual(g_buffer.is_full(), true);
+}
+
+
+test "delete second half" {
+    const my_data = [_]u8{};
+
+    var g_buffer = GapBuffer{};
+    try g_buffer.init(my_data[0..]);
+
+
+    // move left
+    try g_buffer.move_buffer(0);
+
+    const insert_data: [buf_size]u8 = [_]u8{3} ** buf_size;
+    _ = g_buffer.insert_data(&insert_data);
+
+    const full_data = g_buffer.data;
+
+    const inv_mem : [buf_size / 2]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** (buf_size / 2);
+    const sec_half = try g_buffer.delete_second_half();
+
+    try testing.expect(std.mem.eql(u8, full_data[0..g_buffer.p_start], g_buffer.data[0..g_buffer.p_start]));
+    try testing.expect(std.mem.eql(u8, sec_half[0..], full_data[buf_size/2..]));
+    try testing.expect(std.mem.eql(u8, inv_mem[0..], g_buffer.data[g_buffer.p_start..]));
 }
 
 
