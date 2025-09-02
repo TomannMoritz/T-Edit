@@ -57,6 +57,7 @@ pub const DocumentBuffer = struct {
     pos_y : u32,
     doc_height : u32,
     buf_index : u32,
+    allocator : std.mem.Allocator,
 
     pub fn create(allocator : std.mem.Allocator) !*DocumentBuffer {
         const doc_buf = try allocator.create(DocumentBuffer);
@@ -75,6 +76,7 @@ pub const DocumentBuffer = struct {
         doc_buf.pos_y = 0;
         doc_buf.doc_height = 0;
         doc_buf.buf_index = 0;
+        doc_buf.allocator = allocator;
 
         return doc_buf;
     }
@@ -92,8 +94,8 @@ pub const DocumentBuffer = struct {
         allocator.destroy(self);
     }
 
-    pub fn add_buffer(self: *DocumentBuffer, node : ?*DocumentNode, allocator : std.mem.Allocator, data : []const u8) !*DocumentNode {
-        var new_node = try DocumentNode.create(allocator, data);
+    pub fn add_buffer(self: *DocumentBuffer, node : ?*DocumentNode, data : []const u8) !*DocumentNode {
+        var new_node = try DocumentNode.create(self.allocator, data);
 
         // first node
         if (node == null){

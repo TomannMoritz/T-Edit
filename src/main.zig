@@ -146,7 +146,7 @@ fn setup_document(allocator : std.mem.Allocator, file : std.fs.File) !*document_
 
         if (bytes_read == 0){ break; }
 
-        last_node = try doc_buffer.add_buffer(last_node, allocator, &buf);
+        last_node = try doc_buffer.add_buffer(last_node, &buf);
     }
 
     return doc_buffer;
