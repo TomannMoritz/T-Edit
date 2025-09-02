@@ -121,9 +121,10 @@ pub const GapBuffer = struct {
     pub fn delete_second_half(self: *GapBuffer) ![buf_size/2]u8 {
         var del_data : [buf_size / 2]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** (buf_size / 2);
 
-        try self.move_buffer(buf_size / 2);
+        // gap stays in the first half
+        try self.move_buffer((buf_size / 2) - 1);
 
-        const num_ele: u32 = self.get_num_elements() - buf_size / 2;
+        const num_ele: u32 = self.get_num_elements() - (buf_size / 2) + 1;
 
         @memcpy(del_data[0..num_ele], self.data[self.p_end + 1 .. self.p_end + 1 + num_ele]);
         @memset(self.data[self.p_end + 1 .. self.p_end + 1 + num_ele], @intFromEnum(CodePoint.NULL));
@@ -290,14 +291,13 @@ test "delete second half" {
     const insert_data: [buf_size]u8 = [_]u8{3} ** buf_size;
     _ = g_buffer.insert_data(&insert_data);
 
-    const full_data = g_buffer.data;
 
     const inv_mem : [buf_size / 2]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** (buf_size / 2);
     const sec_half = try g_buffer.delete_second_half();
 
-    try testing.expect(std.mem.eql(u8, full_data[0..g_buffer.p_start], g_buffer.data[0..g_buffer.p_start]));
-    try testing.expect(std.mem.eql(u8, sec_half[0..], full_data[buf_size/2..]));
-    try testing.expect(std.mem.eql(u8, inv_mem[0..], g_buffer.data[g_buffer.p_start..]));
+    try testing.expect(std.mem.eql(u8, insert_data[0..g_buffer.p_start], g_buffer.data[0..g_buffer.p_start]));
+    try testing.expect(std.mem.eql(u8, sec_half[0..], insert_data[buf_size/2..]));
+    try testing.expect(std.mem.eql(u8, inv_mem[0..], g_buffer.data[g_buffer.p_start+1..]));
 }
 
 
