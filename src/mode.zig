@@ -58,15 +58,13 @@ pub const DocMode = struct {
             Mode.Exit => false,
         };
 
+        _ = check_document_bounds(doc_buffer, cfg);
         return update_ui;
     }
 
 
     fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer, cfg : *const Config) bool {
         var update_buffer: bool = false;
-        const ver_offset : u32 = cfg.offset_vertical;
-        const ver_height : u32 = @min(doc_buffer.doc_height, cfg.text_height);
-
 
         // --------------------------------------------------
         // special
@@ -82,47 +80,24 @@ pub const DocMode = struct {
         // move left
         if (key == @intFromEnum(Key.MOVE_LEFT)){
             doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x -| 1;
-
-            if (doc_buffer.cursor.pos_x < doc_buffer.pos_x + cfg.offset_horizontal){
-                doc_buffer.pos_x = doc_buffer.pos_x -| 1;
-            }
-            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
-            doc_buffer.v_pos_x = doc_buffer.pos_x;
             update_buffer = true;
         }
 
         // move right
         if (key == @intFromEnum(Key.MOVE_RIGHT)){
-            const new_pos_x = @min(doc_buffer.cursor.pos_x + 1, doc_buffer.cursor.curr_line_width);
-            doc_buffer.cursor.pos_x = new_pos_x;
-
-            if (doc_buffer.pos_x + cfg.text_width < doc_buffer.cursor.pos_x + cfg.offset_horizontal + 1){
-                doc_buffer.pos_x += 1;
-            }
-            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
-            doc_buffer.v_pos_x = doc_buffer.pos_x;
+            doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x +| 1;
             update_buffer = true;
         }
 
         // move up
         if (key == @intFromEnum(Key.MOVE_LINE_UP)){
             doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y -| 1;
-
-            // move document up
-            if (doc_buffer.cursor.pos_y < doc_buffer.pos_y + ver_offset){
-                doc_buffer.pos_y = doc_buffer.pos_y -| 1;
-            }
             update_buffer = true;
         }
 
         // move down
         if (key == @intFromEnum(Key.MOVE_LINE_DOWN)){
             doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y +| 1;
-
-            // move document down
-            if (doc_buffer.cursor.pos_y + ver_offset + 1 > doc_buffer.pos_y + ver_height and doc_buffer.pos_y + ver_height < doc_buffer.doc_height){
-                doc_buffer.pos_y = doc_buffer.pos_y +| 1;
-            }
             update_buffer = true;
         }
 
@@ -176,6 +151,72 @@ pub const DocMode = struct {
 
             doc_buffer.pos_x = doc_buffer.pos_x -| diff -| doc_config.offset_horizontal;
         }
+    }
+
+
+    fn check_document_bounds(doc_buffer : *DocumentBuffer, cfg : *const Config) bool {
+        const ver_offset : u32 = cfg.offset_vertical;
+        const ver_height : u32 = @min(doc_buffer.doc_height, cfg.text_height);
+        var new_document_position : bool = false;
+
+
+        // --------------------------------------------------
+        // horizontal
+        // set right bound
+        doc_buffer.cursor.pos_x = @min(doc_buffer.cursor.pos_x, doc_buffer.cursor.curr_line_width);
+
+        // move document display left
+        const x_cursor_left : u32 = doc_buffer.cursor.pos_x;
+        const x_buf_left : u32 = doc_buffer.pos_x + cfg.offset_horizontal;
+
+        if (x_cursor_left < x_buf_left){
+            const left_diff : u32 = x_buf_left - x_cursor_left;
+            doc_buffer.pos_x = doc_buffer.pos_x -| left_diff;
+            new_document_position = true;
+        }
+
+        // move document right
+        const x_cursor_right : u32 = doc_buffer.cursor.pos_x + cfg.offset_horizontal + 1;
+        const x_buf_right : u32 = doc_buffer.pos_x + cfg.text_width;
+
+        if (x_cursor_right > x_buf_right){
+            const right_diff : u32 = x_cursor_right - x_buf_right;
+            doc_buffer.pos_x += right_diff;
+            new_document_position = true;
+        }
+
+        doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+        doc_buffer.v_pos_x = doc_buffer.pos_x;
+
+
+
+        // --------------------------------------------------
+        // vertical
+        // set bottom bound
+        doc_buffer.cursor.pos_y = @min(doc_buffer.cursor.pos_y, doc_buffer.doc_height);
+
+        // move document up
+        const y_cursor_up : u32 = doc_buffer.cursor.pos_y;
+        const y_buf_up : u32 = doc_buffer.pos_y + ver_offset;
+
+        if (y_cursor_up < y_buf_up){
+            const up_diff : u32 = y_buf_up - y_cursor_up;
+            doc_buffer.pos_y = doc_buffer.pos_y -| up_diff;
+            new_document_position = true;
+        }
+
+        // move document down
+        const y_cursor_down : u32 = doc_buffer.cursor.pos_y + ver_offset + 1;
+        const y_buf_down : u32 = doc_buffer.pos_y + ver_height;
+        const can_scroll_down : bool = y_buf_down < doc_buffer.doc_height;
+
+        if (y_cursor_down > y_buf_down and can_scroll_down){
+            const down_diff : u32 = y_cursor_down - y_buf_down;
+            doc_buffer.pos_y = doc_buffer.pos_y +| down_diff;
+            new_document_position = true;
+        }
+
+        return new_document_position;
     }
 
 
