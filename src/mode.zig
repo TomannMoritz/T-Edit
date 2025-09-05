@@ -52,11 +52,13 @@ pub const DocMode = struct {
         // TODO: evaluate further inputs
         const key: u8 = buffer[0];
 
-        switch (self.mode){
-            Mode.Normal => return self.parse_normal_mode(key, doc_buffer, cfg),
-            Mode.Insert => return self.parse_insert_mode(key, doc_buffer),
-            Mode.Exit => return false,
-        }
+        const update_ui = switch (self.mode){
+            Mode.Normal => self.parse_normal_mode(key, doc_buffer, cfg),
+            Mode.Insert => self.parse_insert_mode(key, doc_buffer),
+            Mode.Exit => false,
+        };
+
+        return update_ui;
     }
 
 
@@ -177,10 +179,18 @@ pub const DocMode = struct {
     }
 
 
+    // TODO: update screen/display position
     fn parse_insert_mode(self: *DocMode, key : u8, doc_buffer: *DocumentBuffer) bool {
-        _ = doc_buffer;
         if (key == @intFromEnum(CodePoint.ESCAPE)){
             self.mode = Mode.Normal;
+        }
+
+        const valid_char = 32 <= key and key <= 126;
+        if (valid_char){
+            const chars : [1]u8 = [_]u8{key};
+            _ = doc_buffer.insert_data(&chars) catch { };
+
+            return true;
         }
 
         return false;

@@ -256,6 +256,28 @@ pub const DocumentBuffer = struct {
         }
     }
 
+    pub fn insert_data(self: *DocumentBuffer, chars : []const u8) !void {
+        var inserted_char : u32 = 0;
+
+        while (inserted_char < chars.len){
+            // TODO: move once when entering insert mode
+            const cursor_node = try self.get_buf_cursor();
+            // move cursor to position
+            try cursor_node.g_buffer.?.move_buffer(self.buf_index);
+
+            const ins_data = cursor_node.g_buffer.?.insert_data(chars[inserted_char..]);
+            inserted_char += @intCast(ins_data.len);
+
+            // TODO: update index
+            self.cursor.pos_x += @intCast(ins_data.len);
+
+            if (inserted_char < chars.len){
+                const sec_half = try cursor_node.g_buffer.?.delete_second_half();
+                _ = try self.add_buffer(cursor_node, &sec_half);
+            }
+        }
+    }
+
 
     pub fn get_buf_data(node : *DocumentNode) ![16]u8 {
         return node.g_buffer.?.data;
