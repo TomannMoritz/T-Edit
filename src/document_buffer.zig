@@ -154,11 +154,16 @@ pub const DocumentBuffer = struct {
                 }
 
 
+                const in_vertical_range = line_counter >= vertical_min and line_counter <= vertical_max;
+                const in_horizontal_range = col_counter >= horizontal_min and col_counter <= horizontal_max;
+
                 // end of line
                 if (@intFromEnum(CodePoint.NEW_LINE) == ele){
-                    // create space after new line character
-                    buffer[buf_index] = ele;
-                    buf_index += 2;
+                    if (in_vertical_range){
+                        // create space after new line character
+                        buffer[buf_index] = ele;
+                        buf_index += 2;
+                    }
 
 
                     // limit horizontal position to eol
@@ -173,9 +178,6 @@ pub const DocumentBuffer = struct {
 
 
                 // fill buffer
-                const in_vertical_range = line_counter >= vertical_min and line_counter <= vertical_max;
-                const in_horizontal_range = col_counter >= horizontal_min and col_counter <= horizontal_max;
-
                 if (in_vertical_range and in_horizontal_range){
                     buffer[buf_index] = ele;
                     buf_index += 1;
