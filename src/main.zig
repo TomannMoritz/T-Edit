@@ -57,13 +57,14 @@ pub fn main() !void {
 
     // input
     const stdin: std.fs.File = std.fs.File.stdin();
-    var stdin_buf: [stdin_buf_size]u8 = undefined;
+    var stdin_buf: [stdin_buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** stdin_buf_size;
 
     try termios.set_raw_mode();
 
     while (true){
         _ = try stdin.read(&stdin_buf);
         const data_changed = doc_mode.input(&stdin_buf, doc_buffer, &doc_config);
+        @memset(&stdin_buf, @intFromEnum(CodePoint.NULL));
 
         // update display
         if (data_changed){
@@ -141,7 +142,7 @@ fn setup_document(allocator : std.mem.Allocator, file : std.fs.File) !*document_
 
     // save file data
     while (true) {
-        var buf: [document_buffer.init_size]u8 = undefined;
+        var buf: [document_buffer.init_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** document_buffer.init_size;
         const bytes_read = try file.read(&buf);
 
         if (bytes_read == 0){ break; }
