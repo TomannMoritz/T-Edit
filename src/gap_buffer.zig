@@ -94,18 +94,6 @@ pub const GapBuffer = struct {
     }
 
     // Delete characters
-    pub fn delete_left(self: *GapBuffer, num_ele: u32) [buf_size]u8 {
-        const new_start : u32 = self.p_start -| num_ele;
-        const diff_ele : u32 = self.p_start - new_start;
-
-        var deleted_data: [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
-        @memmove(deleted_data[0..diff_ele], self.data[new_start..self.p_start]);
-        @memset(self.data[new_start..self.p_start], @intFromEnum(CodePoint.NULL));
-
-        self.p_start = new_start;
-        return deleted_data;
-    }
-
     pub fn delete_right(self: *GapBuffer, num_ele: u32) [buf_size]u8 {
         const new_end : u32 = @min(self.p_end + num_ele, buf_size - 1);
         const diff_ele : u32 = new_end - self.p_end;
@@ -191,32 +179,6 @@ test "move_buffer left/right" {
     try testing.expectEqual(buf_size, g_buffer.data.len);
 
     try testing.expect(std.mem.eql(u8, g_buffer.data[0..], start_data[0..]));
-}
-
-
-test "delete left data" {
-    var g_buffer = try test_setup();
-
-    const start_position = g_buffer.p_start;
-    const start_data = g_buffer.data;
-
-
-    // delete left
-    const del_pos = 2;
-    const del_data: [buf_size]u8 = g_buffer.delete_left(del_pos);
-
-    try testing.expectEqual(buf_size, g_buffer.data.len);
-    try testing.expectEqual(start_position, g_buffer.p_start + del_pos);
-
-    // check deleted data
-    const start_part = start_data[g_buffer.p_start..start_position];
-    const del_part = del_data[0..del_pos];
-    try testing.expect(std.mem.eql(u8, start_part, del_part));
-
-    // check invalid data
-    const inv_data = g_buffer.data[g_buffer.p_start..start_position];
-    const inv_mem : [del_pos]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** del_pos;
-    try testing.expect(std.mem.eql(u8, inv_data, &inv_mem));
 }
 
 
