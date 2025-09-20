@@ -50,7 +50,7 @@ pub fn main() !void {
 
 
     // first view
-    display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
+    display_data = try doc_buffer.get_display_buffer(display_data, doc_config);
     display_data[doc_buffer.cursor.display_index] = @intFromEnum(CodePoint.CURSOR);
     display_document(display_data, border, doc_buffer, &doc_mode);
 
@@ -68,25 +68,26 @@ pub fn main() !void {
 
         // update display
         if (data_changed){
-            // get new line information
-            _ = try doc_buffer.update_cursor_buf(display_data, doc_config);
+            // line width
+            try doc_buffer.update_cursor_line_width();
+
+            // check bounds
             doc_buffer.update_horizontal(&doc_config);
 
             // clamp cursor position
             doc_buffer.cursor.pos_x = Util.clamp(doc_buffer.cursor.pos_x, 0, doc_buffer.cursor.curr_line_width);
             doc_buffer.cursor.pos_y = Util.clamp(doc_buffer.cursor.pos_y, 0, doc_buffer.doc_height);
             mode.DocMode.update_doc_pos_x(doc_buffer, &doc_config);
+            
 
             // clear memory
             @memset(display_data, @intFromEnum(CodePoint.NULL));
-            display_data = try doc_buffer.update_cursor_buf(display_data, doc_config);
+            display_data = try doc_buffer.get_display_buffer(display_data, doc_config);
 
-            const cursor_index = doc_buffer.cursor.display_index;
-            const cursor_char : u8 = display_data[cursor_index];
-            if (@intFromEnum(CodePoint.NEW_LINE) == cursor_char){
-                display_data[cursor_index + 1] = @intFromEnum(CodePoint.NEW_LINE);
-            }
-            display_data[cursor_index] = @intFromEnum(CodePoint.CURSOR);
+
+            // insert cursor
+            display_data[doc_buffer.cursor.display_index] = @intFromEnum(CodePoint.CURSOR);
+
 
             const num_lines : u8 = doc_config.text_height + 5;
             clear_screen(num_lines);

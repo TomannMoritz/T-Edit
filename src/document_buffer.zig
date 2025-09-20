@@ -130,8 +130,52 @@ pub const DocumentBuffer = struct {
     }
 
 
-    // TODO: proper fast implementation
-    pub fn update_cursor_buf(self: *DocumentBuffer, buffer : []u8, cfg : config.Config) ![]u8 {
+    pub fn get_node_line_start(self: *DocumentBuffer, line_index: u32) ?*DocumentNode{
+        var line_counter : u32 = 0;
+        var iter = self.head;
+
+        while (iter) |node| : (iter = node.next){
+            // find buffer with current line start
+            line_counter += node.g_buffer.?.num_new_lines;
+
+            if (line_counter < line_index){ continue; }
+            return node;
+        }
+
+        return null;
+    }
+
+
+    pub fn update_cursor_line_width(self: *DocumentBuffer) !void {
+        var iter = self.get_node_line_start(self.cursor.pos_y);
+        var line_counter : u32 = self.cursor.pos_y -| 1;
+        var col_counter : u32 = 0;
+
+        outer_loop : while (iter) |node| : (iter = node.next) {
+            // enumerate line width
+            const node_data = node.g_buffer.?.data;
+
+            for (node_data) |ele| {
+                if (line_counter > self.cursor.pos_y){ break :outer_loop; }
+
+                switch (ele) {
+                    @intFromEnum(CodePoint.NULL) => continue,
+                    @intFromEnum(CodePoint.NEW_LINE) => line_counter += 1,
+                    else => {
+                        if (line_counter == self.cursor.pos_y){
+                            col_counter += 1;
+                        }
+                    }
+                }
+
+            }
+        }
+        
+        self.cursor.curr_line_width = col_counter;
+    }
+
+
+    pub fn get_display_buffer(self: *DocumentBuffer, buffer: []u8, cfg: config.Config) ![]u8 {
         // configuration
         const vertical_min = self.pos_y;
         const vertical_max = self.pos_y +| (cfg.text_height -| 1);
@@ -139,64 +183,58 @@ pub const DocumentBuffer = struct {
         const horizontal_min = self.pos_x;
         const horizontal_max = self.pos_x +| (cfg.text_width -| 1);
 
-        // iterate buffers
-        var iter = self.head;
-        var buf_index : u32 = 0;
-
-        var line_counter : u32 = 0;
+        // counters
+        var iter = self.get_node_line_start(self.pos_y);
+        var line_counter : u32 = self.pos_y -| 1;
         var col_counter : u32 = 0;
 
+        var ele_counter : u32 = 0;
 
-        while (iter) |node| : (iter = node.next) {
+        outer_loop : while (iter) |node| : (iter = node.next) {
             const node_data = node.g_buffer.?.data;
 
             for (node_data) |ele| {
                 if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
-
 
                 // cursor position
                 const horizontal_pos = col_counter == self.cursor.pos_x;
                 const vertical_pos = line_counter == self.cursor.pos_y;
 
                 if (vertical_pos and horizontal_pos){
-                    self.cursor.display_index = buf_index;
+                    self.cursor.display_index = ele_counter;
                 }
 
-
+                // document display range
                 const in_vertical_range = line_counter >= vertical_min and line_counter <= vertical_max;
                 const in_horizontal_range = col_counter >= horizontal_min and col_counter <= horizontal_max;
 
-                // end of line
+                if (line_counter > vertical_max){ break :outer_loop; }
+
+
                 if (@intFromEnum(CodePoint.NEW_LINE) == ele){
-                    if (in_vertical_range){
-                        // create space after new line character
-                        buffer[buf_index] = ele;
-                        buf_index += 2;
-                    }
-
-
-                    // limit horizontal position to eol
-                    if (vertical_pos){
-                        self.cursor.curr_line_width = col_counter;
-                    }
-
                     line_counter += 1;
                     col_counter = 0;
+
+                    // keep new line characters outside of the horizontal range
+                    if (in_vertical_range){
+                        // create space before new line character
+                        buffer[ele_counter + 1] = ele;
+                        ele_counter += 2;
+                    }
                     continue;
                 }
 
 
                 // fill buffer
-                if (in_vertical_range and in_horizontal_range){
-                    buffer[buf_index] = ele;
-                    buf_index += 1;
+                if (in_horizontal_range and in_vertical_range){
+                    buffer[ele_counter] = ele;
+                    ele_counter += 1;
                 }
 
                 col_counter += 1;
             }
         }
-
-        self.doc_height = line_counter;
+        
         return buffer;
     }
 
