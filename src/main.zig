@@ -150,6 +150,7 @@ fn setup_document(allocator : std.mem.Allocator, file : std.fs.File) !*document_
         last_node = try doc_buffer.add_buffer(last_node, &buf);
     }
 
+    try doc_buffer.update_cursor_line_width();
     return doc_buffer;
 }
 

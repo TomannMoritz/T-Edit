@@ -97,6 +97,14 @@ pub const DocumentBuffer = struct {
     pub fn add_buffer(self: *DocumentBuffer, node : ?*DocumentNode, data : []const u8) !*DocumentNode {
         var new_node = try DocumentNode.create(self.allocator, data);
 
+        // update document info
+        for (data) |ele| {
+            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
+                self.doc_height += 1;
+            }
+        }
+
+
         // first node
         if (node == null){
             self.head = new_node;
@@ -104,6 +112,7 @@ pub const DocumentBuffer = struct {
         }
 
 
+        // insert new node after node
         new_node.next = node.?.next;
         node.?.next = new_node;
 
