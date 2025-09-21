@@ -195,6 +195,8 @@ pub const DocumentBuffer = struct {
 
             for (node_data) |ele| {
                 if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
+                if (line_counter == vertical_max and col_counter > horizontal_max){ break :outer_loop; }
+                if (line_counter > vertical_max){ break :outer_loop; }
 
                 // cursor position
                 const horizontal_pos = col_counter == self.cursor.pos_x;
@@ -207,8 +209,6 @@ pub const DocumentBuffer = struct {
                 // document display range
                 const in_vertical_range = line_counter >= vertical_min and line_counter <= vertical_max;
                 const in_horizontal_range = col_counter >= horizontal_min and col_counter <= horizontal_max;
-
-                if (line_counter > vertical_max){ break :outer_loop; }
 
 
                 if (@intFromEnum(CodePoint.NEW_LINE) == ele){
@@ -294,7 +294,8 @@ pub const DocumentBuffer = struct {
             try node.g_buffer.?.move_buffer(self.buf_index);
 
             const delete_char_right = num_char -| deleted_char;
-            _ = node.g_buffer.?.delete_right(delete_char_right);
+            const del_data = node.g_buffer.?.delete_right(delete_char_right);
+            try self.update_doc_cursor_delete(&del_data);
 
 
             const num_del = num_ele - node.g_buffer.?.get_num_elements();
@@ -304,6 +305,31 @@ pub const DocumentBuffer = struct {
             }
         }
     }
+
+
+    fn update_doc_cursor_delete(self : *DocumentBuffer, del_data : []const u8) !void {
+        var update_line_width : bool = false;
+
+        for (del_data) |ele| {
+            // TODO: fix: delted data contains null characters
+            if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
+            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
+                update_line_width = true;
+                self.doc_height -= 1;
+                continue;
+            }
+
+            // normal characters
+            if (self.cursor.curr_line_width > 0){
+                self.cursor.curr_line_width -= 1;
+            }
+        }
+
+        if (update_line_width){
+            try self.update_cursor_line_width();
+        }
+    }
+
 
     pub fn insert_data(self: *DocumentBuffer, chars : []const u8) !void {
         var inserted_char : u32 = 0;
@@ -317,13 +343,34 @@ pub const DocumentBuffer = struct {
             const ins_data = cursor_node.g_buffer.?.insert_data(chars[inserted_char..]);
             inserted_char += @intCast(ins_data.len);
 
-            // TODO: update index
-            self.cursor.pos_x += @intCast(ins_data.len);
+            self.update_doc_cursor_insert(ins_data);
 
             if (inserted_char < chars.len){
                 const sec_half = try cursor_node.g_buffer.?.delete_second_half();
                 _ = try self.add_buffer(cursor_node, &sec_half);
             }
+        }
+    }
+
+    fn update_doc_cursor_insert(self : *DocumentBuffer, ins_data : []const u8) void {
+        for (ins_data) |ele| {
+            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
+                const line_width : u32 = self.cursor.curr_line_width;
+                const width_left : u32 = line_width - self.cursor.pos_x;
+
+                self.cursor.curr_line_width = width_left;
+                self.cursor.v_pos_x = 0;
+                self.cursor.pos_x = 0;
+                self.cursor.pos_y += 1;
+                self.doc_height += 1;
+                continue;
+            }
+
+            // normal characters
+            self.cursor.pos_x += 1;
+            self.cursor.v_pos_x = self.cursor.pos_x;
+
+            self.cursor.curr_line_width += 1;
         }
     }
 
