@@ -39,8 +39,15 @@ pub const Mode = enum {
 };
 
 
+pub const Update = struct {
+    line_width: bool = false,
+    display: bool = false
+};
+
+
 pub const DocMode = struct {
-    mode : Mode,
+    mode: Mode = Mode.Normal,
+    update: Update = Update{},
 
 
     pub fn is_exit(self: *DocMode) bool {
@@ -48,57 +55,66 @@ pub const DocMode = struct {
     }
 
 
-    pub fn input(self: *DocMode, buffer : []u8, doc_buffer: *DocumentBuffer, cfg : *const Config) bool {
+    pub fn input(self: *DocMode, buffer : []u8, doc_buffer: *DocumentBuffer, cfg : *const Config) void {
         // TODO: evaluate further inputs
         const key: u8 = buffer[0];
 
-        const update_ui = switch (self.mode){
+        switch (self.mode){
             Mode.Normal => self.parse_normal_mode(key, doc_buffer, cfg),
             Mode.Insert => self.parse_insert_mode(key, doc_buffer),
-            Mode.Exit => false,
-        };
+            Mode.Exit => {},
+        }
 
         _ = check_document_bounds(doc_buffer, cfg);
-        return update_ui;
     }
 
 
-    fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer, cfg : *const Config) bool {
-        var update_buffer: bool = false;
-
+    fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer, cfg : *const Config) void {
         // --------------------------------------------------
         // special
         // quit
         if (key == @intFromEnum(Key.QUIT)){
             self.mode = Mode.Exit;
-            return false;
+            return;
         }
-
 
         // --------------------------------------------------
         // movement
+        // TODO: update display only when required (out of bounds)
         // move left
         if (key == @intFromEnum(Key.MOVE_LEFT)){
             doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x -| 1;
-            update_buffer = true;
+
+            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+            doc_buffer.v_pos_x = doc_buffer.pos_x;
+
+            self.update.display = true;
         }
 
         // move right
         if (key == @intFromEnum(Key.MOVE_RIGHT)){
             doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x +| 1;
-            update_buffer = true;
+
+            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+            doc_buffer.v_pos_x = doc_buffer.pos_x;
+
+            self.update.display = true;
         }
 
         // move up
         if (key == @intFromEnum(Key.MOVE_LINE_UP)){
             doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y -| 1;
-            update_buffer = true;
+
+            self.update.line_width = true;
+            self.update.display = true;
         }
 
         // move down
         if (key == @intFromEnum(Key.MOVE_LINE_DOWN)){
             doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y +| 1;
-            update_buffer = true;
+
+            self.update.line_width = true;
+            self.update.display = true;
         }
 
 
@@ -110,7 +126,8 @@ pub const DocMode = struct {
             }else |err| {
                 std.debug.print("ERROR: {any}\n", .{err});
             }
-            update_buffer = true;
+
+            self.update.display = true;
         }
 
         // delete left of cursor
@@ -125,13 +142,14 @@ pub const DocMode = struct {
             _ = parse_normal_mode(self, new_key, doc_buffer, cfg);
             const pos_x_after : u32 = doc_buffer.cursor.pos_x;
 
-            if (pos_x_before == pos_x_after){ return false; }
+            if (pos_x_before == pos_x_after){ return; }
 
             if (doc_buffer.delete_right(1)) |_| {
             }else |err| {
                 std.debug.print("ERROR: {any}\n", .{err});
             }
-            update_buffer = true;
+
+            self.update.display = true;
         }
 
 
@@ -139,9 +157,9 @@ pub const DocMode = struct {
         // insert mode
         if (key == @intFromEnum(Key.INSERT_UNDER_CURSOR)){
             self.mode = Mode.Insert;
-        }
 
-        return update_buffer;
+            self.update.display = true;
+        }
     }
 
 
@@ -185,9 +203,6 @@ pub const DocMode = struct {
             new_document_position = true;
         }
 
-        doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
-        doc_buffer.v_pos_x = doc_buffer.pos_x;
-
 
 
         // --------------------------------------------------
@@ -221,20 +236,20 @@ pub const DocMode = struct {
 
 
     // TODO: update screen/display position
-    fn parse_insert_mode(self: *DocMode, key : u8, doc_buffer: *DocumentBuffer) bool {
+    fn parse_insert_mode(self: *DocMode, key : u8, doc_buffer: *DocumentBuffer) void {
         if (key == @intFromEnum(CodePoint.ESCAPE)){
             self.mode = Mode.Normal;
         }
 
         const valid_char = 32 <= key and key <= 126;
-        if (valid_char){
+        const is_enter: bool = key == @intFromEnum(CodePoint.NEW_LINE);
+
+        if (valid_char or is_enter){
             const chars : [1]u8 = [_]u8{key};
             _ = doc_buffer.insert_data(&chars) catch { };
 
-            return true;
+            self.update.display = true;
         }
-
-        return false;
     }
 };
 

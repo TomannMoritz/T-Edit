@@ -30,7 +30,7 @@ pub fn main() !void {
 
     // setup configuration
     const doc_config = setup_config();
-    var doc_mode = mode.DocMode{.mode = mode.Mode.Normal};
+    var doc_mode = mode.DocMode{};
 
     // Allocations
     // parse and save file data
@@ -63,14 +63,17 @@ pub fn main() !void {
 
     while (true){
         _ = try stdin.read(&stdin_buf);
-        const data_changed = doc_mode.input(&stdin_buf, doc_buffer, &doc_config);
+        doc_mode.input(&stdin_buf, doc_buffer, &doc_config);
         @memset(&stdin_buf, @intFromEnum(CodePoint.NULL));
 
-        // update display
-        if (data_changed){
-            // line width
+        // line width
+        if (doc_mode.update.line_width){
             try doc_buffer.update_cursor_line_width();
+            doc_mode.update.line_width = false;
+        }
 
+        // update display
+        if (doc_mode.update.display){
             // check bounds
             doc_buffer.update_horizontal(&doc_config);
 
