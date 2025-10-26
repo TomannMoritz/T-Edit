@@ -217,7 +217,8 @@ pub const DocumentBuffer = struct {
 
                     // keep new line characters outside of the horizontal range
                     if (in_vertical_range){
-                        // create space before new line character
+                        // insert space for the cursor before new line character
+                        buffer[ele_counter] = @intFromEnum(CodePoint.SPACE);
                         buffer[ele_counter + 1] = ele;
                         ele_counter += 2;
                     }
