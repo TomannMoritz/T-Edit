@@ -57,6 +57,8 @@ pub const DocumentBuffer = struct {
     pos_y : u32,
     doc_height : u32,
     buf_index : u32,
+    num_elements: u32,
+    num_gap_buffer: u32,
     allocator : std.mem.Allocator,
 
     pub fn create(allocator : std.mem.Allocator) !*DocumentBuffer {
@@ -76,6 +78,8 @@ pub const DocumentBuffer = struct {
         doc_buf.pos_y = 0;
         doc_buf.doc_height = 0;
         doc_buf.buf_index = 0;
+        doc_buf.num_elements = 0;
+        doc_buf.num_gap_buffer = 0;
         doc_buf.allocator = allocator;
 
         return doc_buf;
@@ -126,6 +130,7 @@ pub const DocumentBuffer = struct {
             self.tail = new_node;
         }
 
+        self.num_gap_buffer += 1;
         return new_node;
     }
 
@@ -305,6 +310,8 @@ pub const DocumentBuffer = struct {
                 break;
             }
         }
+
+        self.num_elements = self.num_elements -| deleted_char;
     }
 
 
@@ -351,6 +358,8 @@ pub const DocumentBuffer = struct {
                 _ = try self.add_buffer(cursor_node, &sec_half);
             }
         }
+
+        self.num_elements += @intCast(chars.len);
     }
 
     fn update_doc_cursor_insert(self : *DocumentBuffer, ins_data : []const u8) void {
