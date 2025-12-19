@@ -48,6 +48,7 @@ pub const DocumentNode = struct {
     }
 };
 
+
 pub const DocumentBuffer = struct {
     head : ?*DocumentNode,
     tail : ?*DocumentNode,
@@ -288,6 +289,8 @@ pub const DocumentBuffer = struct {
     }
 
 
+    // --------------------------------------------------
+    // delete data
     pub fn delete_right(self: *DocumentBuffer, num_char: u32) !void {
         const cursor_node = try self.get_buf_cursor();
         var deleted_char : u32 = 0;
@@ -304,6 +307,13 @@ pub const DocumentBuffer = struct {
             try self.update_doc_cursor_delete(&del_data);
 
 
+            // check to remove buffer
+            const ele_buffer = node.g_buffer.?.get_num_elements();
+            if (ele_buffer == 0){
+                self.delete_node(node);
+                self.num_gap_buffer -= 1;
+            }
+
             const num_del = num_ele - node.g_buffer.?.get_num_elements();
             deleted_char += num_del;
             if (deleted_char >= num_char){
@@ -314,12 +324,35 @@ pub const DocumentBuffer = struct {
         self.num_elements = self.num_elements -| deleted_char;
     }
 
+    fn delete_node(self: *DocumentBuffer, node: *DocumentNode) void {
+        // change head
+        const is_first_node: bool = self.head == node;
+        if (is_first_node){
+            self.head = node.next;
+        }
+
+        // reset pointers
+        const prev_node = node.prev;
+        const next_node = node.next;
+
+        if (prev_node != null){
+            prev_node.?.next = next_node;
+        }
+
+        if (next_node != null){
+            next_node.?.prev = prev_node;
+        }
+
+        // delete node
+        node.deinit(self.allocator);
+        return;
+    }
 
     fn update_doc_cursor_delete(self : *DocumentBuffer, del_data : []const u8) !void {
         var update_line_width : bool = false;
 
         for (del_data) |ele| {
-            // TODO: fix: delted data contains null characters
+            // TODO: fix: deleted data contains null characters
             if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
             if (@intFromEnum(CodePoint.NEW_LINE) == ele){
                 update_line_width = true;
@@ -339,6 +372,8 @@ pub const DocumentBuffer = struct {
     }
 
 
+    // --------------------------------------------------
+    // insert new data
     pub fn insert_data(self: *DocumentBuffer, chars : []const u8) !void {
         var inserted_char : u32 = 0;
 
