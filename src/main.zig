@@ -28,16 +28,15 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    // setup configuration
-    const doc_config = setup_config();
-    var doc_mode = mode.DocMode{};
-
     // Allocations
     // parse and save file data
-    const file = try parse_arguments();
-    var doc_buffer = try setup_document(allocator, file);
+    const file_data = try parse_arguments();
+    var doc_buffer = try setup_document(allocator, file_data.file);
     defer _ = doc_buffer.deinit(allocator);
 
+    // setup configuration
+    const doc_config = setup_config();
+    var doc_mode = mode.DocMode{.file_path = file_data.path};
 
     // allocate display buffer
     var display_data = try allocator.alloc(u8, display_buf_size);
@@ -62,7 +61,7 @@ pub fn main() !void {
 
     while (true){
         _ = try stdin.read(&stdin_buf);
-        doc_mode.input(&stdin_buf, doc_buffer, &doc_config);
+        try doc_mode.input(&stdin_buf, doc_buffer, &doc_config);
         @memset(&stdin_buf, @intFromEnum(CodePoint.NULL));
 
         // line width
@@ -132,7 +131,7 @@ fn display_document(display_data : []u8, border : []const u8, doc_buffer : *docu
 }
 
 
-fn parse_arguments() !std.fs.File {
+fn parse_arguments() !struct {file: std.fs.File, path: []const u8} {
     const args = std.os.argv;
 
     if (args.len != 2){
@@ -144,7 +143,7 @@ fn parse_arguments() !std.fs.File {
     const file_path: []const u8 = std.mem.sliceTo(path_null_terminated, 0);
 
     const file = try std.fs.cwd().openFile(file_path, .{});
-    return file;
+    return .{.file = file, .path = file_path};
 }
 
 

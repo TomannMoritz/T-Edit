@@ -13,7 +13,8 @@ const Config = @import("config.zig").Config;
 
 pub const Key = enum(u8){
     // special
-    QUIT = 'q',
+    NORMAL_MODE = @intFromEnum(CodePoint.ESCAPE),
+    COMMAND_MODE = ':',
 
     // movement
     MOVE_LINE_DOWN = 'j',
@@ -27,15 +28,20 @@ pub const Key = enum(u8){
 
     // insertion
     INSERT_UNDER_CURSOR = 'i',
+
+    // command mode
+    QUIT = 'q',
+    WRITE = 'w',
 };
 
 
 pub const Mode = enum {
     Normal,
     Insert,
+    Command,
     Exit,
 
-    // TODO: command mode (save & quit)
+    // TODO: visualization mode
 };
 
 
@@ -48,6 +54,7 @@ pub const Update = struct {
 pub const DocMode = struct {
     mode: Mode = Mode.Normal,
     update: Update = Update{},
+    file_path: []const u8,
 
 
     pub fn is_exit(self: *DocMode) bool {
@@ -55,13 +62,14 @@ pub const DocMode = struct {
     }
 
 
-    pub fn input(self: *DocMode, buffer : []u8, doc_buffer: *DocumentBuffer, cfg : *const Config) void {
+    pub fn input(self: *DocMode, buffer : []u8, doc_buffer: *DocumentBuffer, cfg : *const Config) !void {
         // TODO: evaluate further inputs
         const key: u8 = buffer[0];
 
         switch (self.mode){
             Mode.Normal => self.parse_normal_mode(key, doc_buffer, cfg),
             Mode.Insert => self.parse_insert_mode(key, doc_buffer),
+            Mode.Command => try self.parse_command_mode(key, doc_buffer),
             Mode.Exit => {},
         }
 
@@ -69,12 +77,14 @@ pub const DocMode = struct {
     }
 
 
+    // --------------------------------------------------
+    // Normal Mode
     fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer, cfg : *const Config) void {
         // --------------------------------------------------
         // special
-        // quit
-        if (key == @intFromEnum(Key.QUIT)){
-            self.mode = Mode.Exit;
+        // switch to command mode
+        if (key == @intFromEnum(Key.COMMAND_MODE)){
+            self.mode = Mode.Command;
             return;
         }
 
@@ -235,9 +245,12 @@ pub const DocMode = struct {
     }
 
 
+    // --------------------------------------------------
+    // Insert Mode
     // TODO: update screen/display position
     fn parse_insert_mode(self: *DocMode, key : u8, doc_buffer: *DocumentBuffer) void {
-        if (key == @intFromEnum(CodePoint.ESCAPE)){
+        // normal mode
+        if (key == @intFromEnum(Key.NORMAL_MODE)){
             self.mode = Mode.Normal;
         }
 
@@ -249,6 +262,38 @@ pub const DocMode = struct {
             _ = doc_buffer.insert_data(&chars) catch { };
 
             self.update.display = true;
+        }
+    }
+
+
+    // --------------------------------------------------
+    // Command Mode
+    fn parse_command_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer) !void {
+        // normal mode
+        if (key == @intFromEnum(Key.NORMAL_MODE)){
+            self.mode = Mode.Normal;
+        }
+
+        // quit
+        if (key == @intFromEnum(Key.QUIT)){
+            self.mode = Mode.Exit;
+            return;
+        }
+
+        // write/save file
+        if (key == @intFromEnum(Key.WRITE) or true){
+            // create allocator
+            var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+            const allocator = gpa.allocator();
+            defer _ = gpa.deinit();
+
+            // allocate write buffer
+            const buf_write = try allocator.alloc(u8, doc_buffer.num_elements);
+            defer allocator.free(buf_write);
+            @memset(buf_write, @intFromEnum(CodePoint.NULL));
+
+            try doc_buffer.get_document_buf_data(buf_write);
+            try std.fs.cwd().writeFile(.{.sub_path = self.file_path, .data=buf_write});
         }
     }
 };

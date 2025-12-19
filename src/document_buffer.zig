@@ -384,6 +384,22 @@ pub const DocumentBuffer = struct {
         }
     }
 
+    pub fn get_document_buf_data(self: *DocumentBuffer, buf: []u8) !void {
+        try std.testing.expect(self.num_elements <= buf.len);
+
+        var element_counter: u32 = 0;
+        var iter = self.head;
+
+        while (iter) |node| : (iter = node.next) {
+            const g_buf_data = node.g_buffer.?.get_data();
+
+            @memcpy(buf[element_counter..element_counter+g_buf_data.first.len], g_buf_data.first);
+            element_counter += @intCast(g_buf_data.first.len);
+
+            @memcpy(buf[element_counter..element_counter+g_buf_data.second.len], g_buf_data.second);
+            element_counter += @intCast(g_buf_data.second.len);
+        }
+    }
 
     pub fn get_buf_data(node : *DocumentNode) ![16]u8 {
         return node.g_buffer.?.data;

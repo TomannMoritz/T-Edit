@@ -49,15 +49,8 @@ pub const GapBuffer = struct {
         return buf_size - self.p_end - 1 + self.p_start;
     }
 
-    pub fn get_data(self: *GapBuffer, allocator: *Allocator) ![]u8 {
-        const gap_size = self.p_end + 1 - self.p_start;
-
-        var raw_data = try allocator.alloc(u8, self.data.len - gap_size);
-
-        @memcpy(raw_data[0..self.p_start], self.data[0..self.p_start]);
-        @memcpy(raw_data[self.p_start..], self.data[self.p_end + 1..]);
-
-        return raw_data;
+    pub fn get_data(self: *GapBuffer) struct {first: []u8, second: []u8} {
+        return .{.first = self.data[0..self.p_start], .second = self.data[self.p_end + 1 ..]};
     }
 
     pub fn get_data_raw(self: *GapBuffer) ![]u8 {
