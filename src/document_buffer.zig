@@ -101,14 +101,7 @@ pub const DocumentBuffer = struct {
 
     pub fn add_buffer(self: *DocumentBuffer, node : ?*DocumentNode, data : []const u8) !*DocumentNode {
         var new_node = try DocumentNode.create(self.allocator, data);
-
-        // update document info
-        for (data) |ele| {
-            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
-                self.doc_height += 1;
-            }
-        }
-
+        self.num_gap_buffer += 1;
 
         // first node
         if (node == null){
@@ -131,10 +124,18 @@ pub const DocumentBuffer = struct {
             self.tail = new_node;
         }
 
-        self.num_gap_buffer += 1;
         return new_node;
     }
 
+    pub fn update_doc_info_insert(self: *DocumentBuffer, data: []const u8) void {
+        for (data) |ele| {
+            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
+                self.doc_height += 1;
+            }
+        }
+
+        self.num_elements += @intCast(data.len);
+    }
 
     pub fn get_node_line_start(self: *DocumentBuffer, line_index: u32) ?*DocumentNode{
         var line_counter : u32 = 0;
@@ -241,7 +242,14 @@ pub const DocumentBuffer = struct {
                 col_counter += 1;
             }
         }
-        
+
+        // Add Space for the cursor at the end of the file
+        if (self.cursor.pos_y == self.doc_height){
+            buffer[ele_counter + 1] = @intFromEnum(CodePoint.SPACE);
+            self.cursor.display_index = ele_counter + 1;
+            self.cursor.curr_line_width = col_counter;
+        }
+
         return buffer;
     }
 
@@ -250,7 +258,25 @@ pub const DocumentBuffer = struct {
         var line_counter : u32 = 0;
         var col_counter : u32 = 0;
 
+        const cursor_pos_x = self.cursor.pos_x;
+        const cursor_pos_y = self.cursor.pos_y;
+
         var iter = self.head;
+
+        const last_doc_element: bool = cursor_pos_x == self.cursor.curr_line_width and cursor_pos_y == self.doc_height;
+        if (last_doc_element){
+            // Assumption: no empty buffers
+            var prev_node = iter.?;
+
+            while (iter) |node| : (iter = node.next){
+                prev_node = node;
+            }
+
+            // update buffer index
+            self.buf_index = prev_node.g_buffer.?.get_num_elements();
+            return prev_node;
+        }
+
 
         while (iter) |node| : (iter = node.next){
             const node_data = node.g_buffer.?.data;
@@ -259,8 +285,9 @@ pub const DocumentBuffer = struct {
             for (node_data) |ele| {
                 if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
 
-                const horizontal_pos = col_counter == self.cursor.pos_x;
-                const vertical_pos = line_counter == self.cursor.pos_y;
+                const horizontal_pos = col_counter == cursor_pos_x;
+                const vertical_pos = line_counter == cursor_pos_y;
+
                 if (horizontal_pos and vertical_pos){
                     self.buf_index = buf_counter;
                     return node;
@@ -311,10 +338,10 @@ pub const DocumentBuffer = struct {
             const ele_buffer = node.g_buffer.?.get_num_elements();
             if (ele_buffer == 0){
                 self.delete_node(node);
-                self.num_gap_buffer -= 1;
+                self.num_gap_buffer = self.num_gap_buffer -| 1;
             }
 
-            const num_del = num_ele - node.g_buffer.?.get_num_elements();
+            const num_del = num_ele - ele_buffer;
             deleted_char += num_del;
             if (deleted_char >= num_char){
                 break;
@@ -377,9 +404,18 @@ pub const DocumentBuffer = struct {
     pub fn insert_data(self: *DocumentBuffer, chars : []const u8) !void {
         var inserted_char : u32 = 0;
 
+        // Empty file
+        if (self.head == null){
+            _ = try self.add_buffer(null, chars);
+            self.update_doc_cursor_insert(chars);
+            self.update_doc_info_insert(chars);
+            return;
+        }
+
         while (inserted_char < chars.len){
             // TODO: move once when entering insert mode
             const cursor_node = try self.get_buf_cursor();
+
             // move cursor to position
             try cursor_node.g_buffer.?.move_buffer(self.buf_index);
 
@@ -394,7 +430,7 @@ pub const DocumentBuffer = struct {
             }
         }
 
-        self.num_elements += @intCast(chars.len);
+        self.update_doc_info_insert(chars);
     }
 
     fn update_doc_cursor_insert(self : *DocumentBuffer, ins_data : []const u8) void {
@@ -407,7 +443,6 @@ pub const DocumentBuffer = struct {
                 self.cursor.v_pos_x = 0;
                 self.cursor.pos_x = 0;
                 self.cursor.pos_y += 1;
-                self.doc_height += 1;
                 continue;
             }
 

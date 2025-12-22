@@ -218,7 +218,7 @@ pub const DocMode = struct {
         // --------------------------------------------------
         // vertical
         // set bottom bound
-        doc_buffer.cursor.pos_y = @min(doc_buffer.cursor.pos_y, doc_buffer.doc_height - 1);
+        doc_buffer.cursor.pos_y = @min(doc_buffer.cursor.pos_y, doc_buffer.doc_height);
 
         // move document up
         const y_cursor_up : u32 = doc_buffer.cursor.pos_y;

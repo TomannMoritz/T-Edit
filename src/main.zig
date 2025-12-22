@@ -109,7 +109,7 @@ fn clear_screen(num_lines : u8) void {
 
 
 fn display_document(display_data : []u8, border : []const u8, doc_buffer : *document_buffer.DocumentBuffer, doc_mode : *const mode.DocMode) !void{
-    const percentage = doc_buffer.num_elements * 100 / (doc_buffer.num_gap_buffer * (document_buffer.init_size * 2 - 1));
+    const percentage = doc_buffer.num_elements * 100 / @max(1, (doc_buffer.num_gap_buffer * (document_buffer.init_size * 2 - 1)));
 
     std.debug.print("Elements: {} Buffers: {} - {}%\n", .{doc_buffer.num_elements, doc_buffer.num_gap_buffer, percentage});
     std.debug.print("Mode: {}\n", .{doc_mode.mode});
@@ -127,7 +127,7 @@ fn display_document(display_data : []u8, border : []const u8, doc_buffer : *docu
     const ANSI_CODE_COLOR = "\x1B[1;47;30m";
 
     std.debug.print("{s}{s}{c}{s}{s}", .{first_part, ANSI_CODE_COLOR, cursor_char, ANSI_CODE_RESET, second_part});
-    std.debug.print("{s}\n", .{border});
+    std.debug.print("\n{s}\n", .{border});
 }
 
 
@@ -160,7 +160,8 @@ fn setup_document(allocator : std.mem.Allocator, file : std.fs.File) !*document_
 
         last_node = try doc_buffer.add_buffer(last_node, buf[0..bytes_read]);
 
-        doc_buffer.num_elements += @intCast(bytes_read);
+        // update document info
+        doc_buffer.update_doc_info_insert(buf[0..bytes_read]);
     }
 
     try doc_buffer.update_cursor_line_width();
