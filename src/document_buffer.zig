@@ -154,8 +154,10 @@ pub const DocumentBuffer = struct {
 
 
     pub fn update_cursor_line_width(self: *DocumentBuffer) !void {
-        var iter = self.get_node_line_start(self.cursor.pos_y);
-        var line_counter : u32 = self.cursor.pos_y -| 1;
+        // TODO: directly use corresponding starting node
+        // requires: node with number of previous lines
+        var iter = self.head;
+        var line_counter : u32 = 0;
         var col_counter : u32 = 0;
 
         outer_loop : while (iter) |node| : (iter = node.next) {
@@ -174,7 +176,6 @@ pub const DocumentBuffer = struct {
                         }
                     }
                 }
-
             }
         }
         
@@ -244,10 +245,10 @@ pub const DocumentBuffer = struct {
         }
 
         // Add Space for the cursor at the end of the file
-        if (self.cursor.pos_y == self.doc_height){
+        const last_doc_element: bool = self.cursor.pos_x == self.cursor.curr_line_width and self.cursor.pos_y == self.doc_height;
+        if (last_doc_element){
             buffer[ele_counter + 1] = @intFromEnum(CodePoint.SPACE);
             self.cursor.display_index = ele_counter + 1;
-            self.cursor.curr_line_width = col_counter;
         }
 
         return buffer;
@@ -265,6 +266,8 @@ pub const DocumentBuffer = struct {
 
         const last_doc_element: bool = cursor_pos_x == self.cursor.curr_line_width and cursor_pos_y == self.doc_height;
         if (last_doc_element){
+            if (iter == null){ return error.OutOfBounds; }
+
             // Assumption: no empty buffers
             var prev_node = iter.?;
 
