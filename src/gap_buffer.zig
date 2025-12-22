@@ -16,7 +16,7 @@ pub const buf_size: u32 = 16;
 
 
 pub fn get_num_new_lines(data: []const u8) u32 {
-    var new_line_counter : u32 = 0;
+    var new_line_counter: u32 = 0;
 
     for (data) |ele| {
         if (@intFromEnum(CodePoint.NEW_LINE) == ele){
@@ -32,7 +32,7 @@ pub const GapBuffer = struct {
     data: [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size,
     p_start: u32 = 0,
     p_end: u32 = buf_size - 1,
-    num_new_lines : u32 = 0,
+    num_new_lines: u32 = 0,
 
     pub fn init(self: *GapBuffer, new_data: []const u8) !void {
         // force max half full buffer initialization
@@ -103,10 +103,10 @@ pub const GapBuffer = struct {
 
     // Delete characters
     pub fn delete_right(self: *GapBuffer, num_ele: u32) [buf_size]u8 {
-        const new_end : u32 = @min(self.p_end + num_ele, buf_size - 1);
-        const diff_ele : u32 = new_end - self.p_end;
+        const new_end: u32 = @min(self.p_end + num_ele, buf_size - 1);
+        const diff_ele: u32 = new_end - self.p_end;
 
-        var del_data : [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
+        var del_data: [buf_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** buf_size;
         @memmove(del_data[0..diff_ele], self.data[self.p_end+1..new_end+1]);
         @memset(self.data[self.p_end+1..new_end+1], @intFromEnum(CodePoint.NULL));
 
@@ -117,7 +117,7 @@ pub const GapBuffer = struct {
     }
 
     pub fn delete_second_half(self: *GapBuffer) ![buf_size/2]u8 {
-        var del_data : [buf_size / 2]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** (buf_size / 2);
+        var del_data: [buf_size / 2]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** (buf_size / 2);
 
         // gap stays in the first half
         try self.move_buffer((buf_size / 2) - 1);
@@ -218,7 +218,7 @@ test "delete right data" {
 
     // check invalid data
     const inv_data = g_buffer.data[end_position+1..g_buffer.p_end+1];
-    const inv_mem : [del_pos]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** del_pos;
+    const inv_mem: [del_pos]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** del_pos;
     try testing.expect(std.mem.eql(u8, inv_data, &inv_mem));
 }
 
@@ -266,7 +266,7 @@ test "delete second half" {
     _ = g_buffer.insert_data(&insert_data);
 
 
-    const inv_mem : [buf_size / 2]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** (buf_size / 2);
+    const inv_mem: [buf_size / 2]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** (buf_size / 2);
     const sec_half = try g_buffer.delete_second_half();
 
     try testing.expect(std.mem.eql(u8, insert_data[0..g_buffer.p_start], g_buffer.data[0..g_buffer.p_start]));

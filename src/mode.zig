@@ -292,7 +292,7 @@ pub const DocMode = struct {
             defer allocator.free(buf_write);
             @memset(buf_write, @intFromEnum(CodePoint.NULL));
 
-            try doc_buffer.get_document_buf_data(buf_write);
+            try doc_buffer.update_document_buf_data(buf_write);
             try std.fs.cwd().writeFile(.{.sub_path = self.file_path, .data=buf_write});
         }
     }

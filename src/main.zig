@@ -39,7 +39,7 @@ pub fn main() !void {
     var doc_mode = mode.DocMode{.file_path = file_data.path};
 
     // allocate display buffer
-    var display_data = try allocator.alloc(u8, display_buf_size);
+    const display_data = try allocator.alloc(u8, display_buf_size);
     defer allocator.free(display_data);
     @memset(display_data, @intFromEnum(CodePoint.NULL));
 
@@ -49,7 +49,7 @@ pub fn main() !void {
 
 
     // first view
-    display_data = try doc_buffer.get_display_buffer(display_data, doc_config);
+    try doc_buffer.update_display_buffer(display_data, doc_config);
     try display_document(display_data, border, doc_buffer, &doc_mode);
 
 
@@ -83,10 +83,10 @@ pub fn main() !void {
 
             // clear memory
             @memset(display_data, @intFromEnum(CodePoint.NULL));
-            display_data = try doc_buffer.get_display_buffer(display_data, doc_config);
+            try doc_buffer.update_display_buffer(display_data, doc_config);
 
 
-            const num_lines : u8 = doc_config.text_height + 5;
+            const num_lines: u8 = doc_config.text_height + 5;
             clear_screen(num_lines);
             try display_document(display_data, border, doc_buffer, &doc_mode);
         }
@@ -99,7 +99,7 @@ pub fn main() !void {
 }
 
 
-fn clear_screen(num_lines : u8) void {
+fn clear_screen(num_lines: u8) void {
     const ANSI_CURSOR_UP = 'A';
     const ANSI_ERASE_END_OF_SCREEN = "0J";
 
@@ -108,7 +108,7 @@ fn clear_screen(num_lines : u8) void {
 }
 
 
-fn display_document(display_data : []u8, border : []const u8, doc_buffer : *document_buffer.DocumentBuffer, doc_mode : *const mode.DocMode) !void{
+fn display_document(display_data: []u8, border: []const u8, doc_buffer: *document_buffer.DocumentBuffer, doc_mode: *const mode.DocMode) !void{
     const percentage = doc_buffer.num_elements * 100 / @max(1, (doc_buffer.num_gap_buffer * (document_buffer.init_size * 2 - 1)));
 
     std.debug.print("Elements: {} Buffers: {} - {}%\n", .{doc_buffer.num_elements, doc_buffer.num_gap_buffer, percentage});
@@ -147,9 +147,9 @@ fn parse_arguments() !struct {file: std.fs.File, path: []const u8} {
 }
 
 
-fn setup_document(allocator : std.mem.Allocator, file : std.fs.File) !*document_buffer.DocumentBuffer {
+fn setup_document(allocator: std.mem.Allocator, file: std.fs.File) !*document_buffer.DocumentBuffer {
     var doc_buffer = try document_buffer.DocumentBuffer.create(allocator);
-    var last_node : ?*document_buffer.DocumentNode = null;
+    var last_node: ?*document_buffer.DocumentNode = null;
 
     // save file data
     while (true) {

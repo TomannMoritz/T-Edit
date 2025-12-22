@@ -16,12 +16,12 @@ pub const init_size = gap_buffer.buf_size / 2;
 
 
 pub const Cursor = struct {
-    v_pos_x : u32,
-    pos_x : u32,
-    pos_y : u32,
-    at_eol : bool,
-    display_index : u32,
-    curr_line_width : u32,
+    v_pos_x: u32,
+    pos_x: u32,
+    pos_y: u32,
+    at_eol: bool,
+    display_index: u32,
+    curr_line_width: u32,
 };
 
 
@@ -31,7 +31,7 @@ pub const DocumentNode = struct {
     next: ?*DocumentNode,
     prev: ?*DocumentNode,
 
-    pub fn create(allocator : std.mem.Allocator, data : []const u8) !*DocumentNode {
+    pub fn create(allocator: std.mem.Allocator, data: []const u8) !*DocumentNode {
         var new_doc_node = try allocator.create(DocumentNode);
         new_doc_node.next = null;
         new_doc_node.prev = null;
@@ -43,26 +43,26 @@ pub const DocumentNode = struct {
         return new_doc_node;
     }
 
-    pub fn deinit(self: *DocumentNode, allocator : std.mem.Allocator) void {
+    pub fn deinit(self: *DocumentNode, allocator: std.mem.Allocator) void {
         allocator.destroy(self);
     }
 };
 
 
 pub const DocumentBuffer = struct {
-    head : ?*DocumentNode,
-    tail : ?*DocumentNode,
-    cursor : Cursor,
-    v_pos_x : u32,
-    pos_x : u32,
-    pos_y : u32,
-    doc_height : u32,
-    buf_index : u32,
+    head: ?*DocumentNode,
+    tail: ?*DocumentNode,
+    cursor: Cursor,
+    v_pos_x: u32,
+    pos_x: u32,
+    pos_y: u32,
+    doc_height: u32,
+    buf_index: u32,
     num_elements: u32,
     num_gap_buffer: u32,
-    allocator : std.mem.Allocator,
+    allocator: std.mem.Allocator,
 
-    pub fn create(allocator : std.mem.Allocator) !*DocumentBuffer {
+    pub fn create(allocator: std.mem.Allocator) !*DocumentBuffer {
         const doc_buf = try allocator.create(DocumentBuffer);
         doc_buf.head = null;
         doc_buf.tail = null;
@@ -86,7 +86,7 @@ pub const DocumentBuffer = struct {
         return doc_buf;
     }
 
-    pub fn deinit(self : *DocumentBuffer, allocator : std.mem.Allocator) void {
+    pub fn deinit(self: *DocumentBuffer, allocator: std.mem.Allocator) void {
         // deinit all nodes
         var iter = self.head;
 
@@ -99,7 +99,45 @@ pub const DocumentBuffer = struct {
         allocator.destroy(self);
     }
 
-    pub fn add_buffer(self: *DocumentBuffer, node : ?*DocumentNode, data : []const u8) !*DocumentNode {
+
+    // --------------------------------------------------
+    // modify data
+    // --------------------------------------------------
+    // insert data
+    pub fn insert_data(self: *DocumentBuffer, chars: []const u8) !void {
+        var inserted_char: u32 = 0;
+
+        // Empty file
+        if (self.head == null){
+            _ = try self.add_buffer(null, chars);
+            self.update_doc_cursor_insert(chars);
+            self.update_doc_info_insert(chars);
+            return;
+        }
+
+        while (inserted_char < chars.len){
+            // TODO: move once when entering insert mode
+            const cursor_node = try self.get_buf_cursor();
+
+            // move cursor to position
+            try cursor_node.g_buffer.?.move_buffer(self.buf_index);
+
+            const ins_data = cursor_node.g_buffer.?.insert_data(chars[inserted_char..]);
+            inserted_char += @intCast(ins_data.len);
+
+            self.update_doc_cursor_insert(ins_data);
+
+            if (inserted_char < chars.len){
+                const sec_half = try cursor_node.g_buffer.?.delete_second_half();
+                _ = try self.add_buffer(cursor_node, &sec_half);
+            }
+        }
+
+        self.update_doc_info_insert(chars);
+    }
+
+    // insert data into a new buffer
+    pub fn add_buffer(self: *DocumentBuffer, node: ?*DocumentNode, data: []const u8) !*DocumentNode {
         var new_node = try DocumentNode.create(self.allocator, data);
         self.num_gap_buffer += 1;
 
@@ -108,7 +146,6 @@ pub const DocumentBuffer = struct {
             self.head = new_node;
             return new_node;
         }
-
 
         // insert new node after node
         new_node.next = node.?.next;
@@ -127,6 +164,27 @@ pub const DocumentBuffer = struct {
         return new_node;
     }
 
+    fn update_doc_cursor_insert(self: *DocumentBuffer, ins_data: []const u8) void {
+        for (ins_data) |ele| {
+            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
+                const line_width: u32 = self.cursor.curr_line_width;
+                const width_left: u32 = line_width - self.cursor.pos_x;
+
+                self.cursor.curr_line_width = width_left;
+                self.cursor.v_pos_x = 0;
+                self.cursor.pos_x = 0;
+                self.cursor.pos_y += 1;
+                continue;
+            }
+
+            // normal characters
+            self.cursor.pos_x += 1;
+            self.cursor.v_pos_x = self.cursor.pos_x;
+
+            self.cursor.curr_line_width += 1;
+        }
+    }
+
     pub fn update_doc_info_insert(self: *DocumentBuffer, data: []const u8) void {
         for (data) |ele| {
             if (@intFromEnum(CodePoint.NEW_LINE) == ele){
@@ -137,28 +195,98 @@ pub const DocumentBuffer = struct {
         self.num_elements += @intCast(data.len);
     }
 
-    pub fn get_node_line_start(self: *DocumentBuffer, line_index: u32) ?*DocumentNode{
-        var line_counter : u32 = 0;
-        var iter = self.head;
 
+    // --------------------------------------------------
+    // delete data
+    pub fn delete_right(self: *DocumentBuffer, num_char: u32) !void {
+        const cursor_node = try self.get_buf_cursor();
+        var deleted_char: u32 = 0;
+
+        var iter: ?*DocumentNode = cursor_node;
         while (iter) |node| : (iter = node.next){
-            // find buffer with current line start
-            line_counter += node.g_buffer.?.num_new_lines;
+            const num_ele = node.g_buffer.?.get_num_elements();
 
-            if (line_counter < line_index){ continue; }
-            return node;
+            // move cursor to position
+            try node.g_buffer.?.move_buffer(self.buf_index);
+
+            const delete_char_right = num_char -| deleted_char;
+            const del_data = node.g_buffer.?.delete_right(delete_char_right);
+            try self.update_doc_cursor_delete(&del_data);
+
+
+            // check to remove buffer
+            const ele_buffer = node.g_buffer.?.get_num_elements();
+            if (ele_buffer == 0){
+                self.delete_node(node);
+                self.num_gap_buffer = self.num_gap_buffer -| 1;
+            }
+
+            const num_del = num_ele - ele_buffer;
+            deleted_char += num_del;
+            if (deleted_char >= num_char){
+                break;
+            }
         }
 
-        return null;
+        self.num_elements = self.num_elements -| deleted_char;
+    }
+
+    fn delete_node(self: *DocumentBuffer, node: *DocumentNode) void {
+        // change head
+        const is_first_node: bool = self.head == node;
+        if (is_first_node){
+            self.head = node.next;
+        }
+
+        // reset pointers
+        const prev_node = node.prev;
+        const next_node = node.next;
+
+        if (prev_node != null){
+            prev_node.?.next = next_node;
+        }
+
+        if (next_node != null){
+            next_node.?.prev = prev_node;
+        }
+
+        // delete node
+        node.deinit(self.allocator);
+        return;
+    }
+
+    fn update_doc_cursor_delete(self: *DocumentBuffer, del_data: []const u8) !void {
+        var update_line_width: bool = false;
+
+        for (del_data) |ele| {
+            // TODO: fix: deleted data contains null characters
+            if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
+            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
+                update_line_width = true;
+                self.doc_height -= 1;
+                continue;
+            }
+
+            // normal characters
+            if (self.cursor.curr_line_width > 0){
+                self.cursor.curr_line_width -= 1;
+            }
+        }
+
+        if (update_line_width){
+            try self.update_cursor_line_width();
+        }
     }
 
 
+    // --------------------------------------------------
+    // document info/cursor info
     pub fn update_cursor_line_width(self: *DocumentBuffer) !void {
         // TODO: directly use corresponding starting node
         // requires: node with number of previous lines
         var iter = self.head;
-        var line_counter : u32 = 0;
-        var col_counter : u32 = 0;
+        var line_counter: u32 = 0;
+        var col_counter: u32 = 0;
 
         outer_loop : while (iter) |node| : (iter = node.next) {
             // enumerate line width
@@ -182,8 +310,73 @@ pub const DocumentBuffer = struct {
         self.cursor.curr_line_width = col_counter;
     }
 
+    pub fn get_buf_cursor(self: *DocumentBuffer) !*DocumentNode {
+        var line_counter: u32 = 0;
+        var col_counter: u32 = 0;
 
-    pub fn get_display_buffer(self: *DocumentBuffer, buffer: []u8, cfg: config.Config) ![]u8 {
+        const cursor_pos_x = self.cursor.pos_x;
+        const cursor_pos_y = self.cursor.pos_y;
+
+        var iter = self.head;
+
+        const last_doc_element: bool = cursor_pos_x == self.cursor.curr_line_width and cursor_pos_y == self.doc_height;
+        if (last_doc_element){
+            if (iter == null){ return error.OutOfBounds; }
+
+            // Assumption: no empty buffers
+            var prev_node = iter.?;
+
+            while (iter) |node| : (iter = node.next){
+                prev_node = node;
+            }
+
+            // update buffer index
+            self.buf_index = prev_node.g_buffer.?.get_num_elements();
+            return prev_node;
+        }
+
+
+        while (iter) |node| : (iter = node.next){
+            const node_data = node.g_buffer.?.data;
+
+            var buf_counter: u32 = 0;
+            for (node_data) |ele| {
+                if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
+
+                const horizontal_pos = col_counter == cursor_pos_x;
+                const vertical_pos = line_counter == cursor_pos_y;
+
+                if (horizontal_pos and vertical_pos){
+                    self.buf_index = buf_counter;
+                    return node;
+                }
+
+                col_counter += 1;
+
+                if (@intFromEnum(CodePoint.NEW_LINE) == ele){
+                    line_counter += 1;
+                    col_counter = 0;
+                }
+                buf_counter += 1;
+            }
+        }
+        return error.OutOfBounds;
+    }
+
+    pub fn update_horizontal(self: *DocumentBuffer, doc_config: *const config.Config) void {
+        const can_jump_further = self.cursor.v_pos_x >= self.cursor.pos_x; 
+        const diff_pos_x = self.cursor.pos_x != self.cursor.v_pos_x;
+
+        if (can_jump_further and diff_pos_x){
+            self.cursor.pos_x = @min(self.cursor.v_pos_x, self.cursor.curr_line_width);
+            self.pos_x = @min(self.v_pos_x, self.cursor.curr_line_width -| doc_config.offset_horizontal);
+        }
+    }
+
+
+    // --------------------------------------------------
+    // interface/display
+    pub fn update_display_buffer(self: *DocumentBuffer, buffer: []u8, cfg: config.Config) !void {
         // configuration
         const vertical_min = self.pos_y;
         const vertical_max = self.pos_y +| (cfg.text_height -| 1);
@@ -193,10 +386,10 @@ pub const DocumentBuffer = struct {
 
         // counters
         var iter = self.get_node_line_start(self.pos_y);
-        var line_counter : u32 = self.pos_y -| 1;
-        var col_counter : u32 = 0;
+        var line_counter: u32 = self.pos_y -| 1;
+        var col_counter: u32 = 0;
 
-        var ele_counter : u32 = 0;
+        var ele_counter: u32 = 0;
 
         outer_loop : while (iter) |node| : (iter = node.next) {
             const node_data = node.g_buffer.?.data;
@@ -250,214 +443,27 @@ pub const DocumentBuffer = struct {
             buffer[ele_counter + 1] = @intFromEnum(CodePoint.SPACE);
             self.cursor.display_index = ele_counter + 1;
         }
-
-        return buffer;
     }
 
-
-    pub fn get_buf_cursor(self: *DocumentBuffer) !*DocumentNode {
-        var line_counter : u32 = 0;
-        var col_counter : u32 = 0;
-
-        const cursor_pos_x = self.cursor.pos_x;
-        const cursor_pos_y = self.cursor.pos_y;
-
+    fn get_node_line_start(self: *DocumentBuffer, line_index: u32) ?*DocumentNode{
+        var line_counter: u32 = 0;
         var iter = self.head;
 
-        const last_doc_element: bool = cursor_pos_x == self.cursor.curr_line_width and cursor_pos_y == self.doc_height;
-        if (last_doc_element){
-            if (iter == null){ return error.OutOfBounds; }
-
-            // Assumption: no empty buffers
-            var prev_node = iter.?;
-
-            while (iter) |node| : (iter = node.next){
-                prev_node = node;
-            }
-
-            // update buffer index
-            self.buf_index = prev_node.g_buffer.?.get_num_elements();
-            return prev_node;
-        }
-
-
         while (iter) |node| : (iter = node.next){
-            const node_data = node.g_buffer.?.data;
+            // find buffer with current line start
+            line_counter += node.g_buffer.?.num_new_lines;
 
-            var buf_counter : u32 = 0;
-            for (node_data) |ele| {
-                if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
-
-                const horizontal_pos = col_counter == cursor_pos_x;
-                const vertical_pos = line_counter == cursor_pos_y;
-
-                if (horizontal_pos and vertical_pos){
-                    self.buf_index = buf_counter;
-                    return node;
-                }
-
-                col_counter += 1;
-
-                if (@intFromEnum(CodePoint.NEW_LINE) == ele){
-                    line_counter += 1;
-                    col_counter = 0;
-                }
-                buf_counter += 1;
-            }
+            if (line_counter < line_index){ continue; }
+            return node;
         }
-        return error.OutOfBounds;
-    }
 
-    pub fn update_horizontal(self: *DocumentBuffer, doc_config : *const config.Config) void {
-        const can_jump_further = self.cursor.v_pos_x >= self.cursor.pos_x; 
-        const diff_pos_x = self.cursor.pos_x != self.cursor.v_pos_x;
-
-        if (can_jump_further and diff_pos_x){
-            self.cursor.pos_x = @min(self.cursor.v_pos_x, self.cursor.curr_line_width);
-            self.pos_x = @min(self.v_pos_x, self.cursor.curr_line_width -| doc_config.offset_horizontal);
-        }
+        return null;
     }
 
 
     // --------------------------------------------------
-    // delete data
-    pub fn delete_right(self: *DocumentBuffer, num_char: u32) !void {
-        const cursor_node = try self.get_buf_cursor();
-        var deleted_char : u32 = 0;
-
-        var iter : ?*DocumentNode = cursor_node;
-        while (iter) |node| : (iter = node.next){
-            const num_ele = node.g_buffer.?.get_num_elements();
-
-            // move cursor to position
-            try node.g_buffer.?.move_buffer(self.buf_index);
-
-            const delete_char_right = num_char -| deleted_char;
-            const del_data = node.g_buffer.?.delete_right(delete_char_right);
-            try self.update_doc_cursor_delete(&del_data);
-
-
-            // check to remove buffer
-            const ele_buffer = node.g_buffer.?.get_num_elements();
-            if (ele_buffer == 0){
-                self.delete_node(node);
-                self.num_gap_buffer = self.num_gap_buffer -| 1;
-            }
-
-            const num_del = num_ele - ele_buffer;
-            deleted_char += num_del;
-            if (deleted_char >= num_char){
-                break;
-            }
-        }
-
-        self.num_elements = self.num_elements -| deleted_char;
-    }
-
-    fn delete_node(self: *DocumentBuffer, node: *DocumentNode) void {
-        // change head
-        const is_first_node: bool = self.head == node;
-        if (is_first_node){
-            self.head = node.next;
-        }
-
-        // reset pointers
-        const prev_node = node.prev;
-        const next_node = node.next;
-
-        if (prev_node != null){
-            prev_node.?.next = next_node;
-        }
-
-        if (next_node != null){
-            next_node.?.prev = prev_node;
-        }
-
-        // delete node
-        node.deinit(self.allocator);
-        return;
-    }
-
-    fn update_doc_cursor_delete(self : *DocumentBuffer, del_data : []const u8) !void {
-        var update_line_width : bool = false;
-
-        for (del_data) |ele| {
-            // TODO: fix: deleted data contains null characters
-            if (@intFromEnum(CodePoint.NULL) == ele){ continue; }
-            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
-                update_line_width = true;
-                self.doc_height -= 1;
-                continue;
-            }
-
-            // normal characters
-            if (self.cursor.curr_line_width > 0){
-                self.cursor.curr_line_width -= 1;
-            }
-        }
-
-        if (update_line_width){
-            try self.update_cursor_line_width();
-        }
-    }
-
-
-    // --------------------------------------------------
-    // insert new data
-    pub fn insert_data(self: *DocumentBuffer, chars : []const u8) !void {
-        var inserted_char : u32 = 0;
-
-        // Empty file
-        if (self.head == null){
-            _ = try self.add_buffer(null, chars);
-            self.update_doc_cursor_insert(chars);
-            self.update_doc_info_insert(chars);
-            return;
-        }
-
-        while (inserted_char < chars.len){
-            // TODO: move once when entering insert mode
-            const cursor_node = try self.get_buf_cursor();
-
-            // move cursor to position
-            try cursor_node.g_buffer.?.move_buffer(self.buf_index);
-
-            const ins_data = cursor_node.g_buffer.?.insert_data(chars[inserted_char..]);
-            inserted_char += @intCast(ins_data.len);
-
-            self.update_doc_cursor_insert(ins_data);
-
-            if (inserted_char < chars.len){
-                const sec_half = try cursor_node.g_buffer.?.delete_second_half();
-                _ = try self.add_buffer(cursor_node, &sec_half);
-            }
-        }
-
-        self.update_doc_info_insert(chars);
-    }
-
-    fn update_doc_cursor_insert(self : *DocumentBuffer, ins_data : []const u8) void {
-        for (ins_data) |ele| {
-            if (@intFromEnum(CodePoint.NEW_LINE) == ele){
-                const line_width : u32 = self.cursor.curr_line_width;
-                const width_left : u32 = line_width - self.cursor.pos_x;
-
-                self.cursor.curr_line_width = width_left;
-                self.cursor.v_pos_x = 0;
-                self.cursor.pos_x = 0;
-                self.cursor.pos_y += 1;
-                continue;
-            }
-
-            // normal characters
-            self.cursor.pos_x += 1;
-            self.cursor.v_pos_x = self.cursor.pos_x;
-
-            self.cursor.curr_line_width += 1;
-        }
-    }
-
-    pub fn get_document_buf_data(self: *DocumentBuffer, buf: []u8) !void {
+    // save the entire document in a buffer
+    pub fn update_document_buf_data(self: *DocumentBuffer, buf: []u8) !void {
         try std.testing.expect(self.num_elements <= buf.len);
 
         var element_counter: u32 = 0;
@@ -473,23 +479,5 @@ pub const DocumentBuffer = struct {
             element_counter += @intCast(g_buf_data.second.len);
         }
     }
-
-    pub fn get_buf_data(node : *DocumentNode) ![16]u8 {
-        return node.g_buffer.?.data;
-    }
-
-
-    pub fn print_buffer(self : *DocumentBuffer) !void {
-        var doc_iter = self.head;
-
-        while (doc_iter) |node| {
-            const data = node.g_buffer.?.data;
-            std.debug.print("{s}", .{data});
-
-            doc_iter = node.next;
-        }
-        std.debug.print("\n", .{});
-    }
 };
-
 
