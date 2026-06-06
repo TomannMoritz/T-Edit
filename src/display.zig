@@ -6,6 +6,7 @@ const std = @import("std");
 const CodePoint = @import("codepoint.zig").CodePoint;
 
 const document_buffer = @import("document_buffer.zig");
+const config = @import("config.zig");
 const mode = @import("mode.zig");
 
 
@@ -18,7 +19,7 @@ pub fn clear_screen(num_lines: u8) void {
 }
 
 
-pub fn display_document(display_data: []u8, border: []const u8, doc_buffer: *document_buffer.DocumentBuffer, doc_mode: *const mode.DocMode) !void{
+pub fn display_document(display_data: []u8, border: []const u8, doc_buffer: *document_buffer.DocumentBuffer, doc_mode: *const mode.DocMode, cfg: *const config.Config) !void{
     const percentage = doc_buffer.num_elements * 100 / @max(1, (doc_buffer.num_gap_buffer * (document_buffer.init_size * 2 - 1)));
 
     std.debug.print("Elements: {} Buffers: {} - {}%\n", .{doc_buffer.num_elements, doc_buffer.num_gap_buffer, percentage});
@@ -36,6 +37,20 @@ pub fn display_document(display_data: []u8, border: []const u8, doc_buffer: *doc
     const ANSI_CODE_RESET = "\x1B[0m";
     const ANSI_CODE_COLOR = "\x1B[1;47;30m";
 
-    std.debug.print("{s}{s}{c}{s}{s}", .{first_part, ANSI_CODE_COLOR, cursor_char, ANSI_CODE_RESET, second_part});
-    std.debug.print("\n{s}\n", .{border});
+    std.debug.print("{s}{s}{c}{s}{s}\n", .{first_part, ANSI_CODE_COLOR, cursor_char, ANSI_CODE_RESET, second_part});
+
+    // NOTE: the buffer will always contain at least on line to insert new text
+    var num_lines: u8 = 1;
+    for (display_data) |ele| {
+        if (ele == '\n'){ num_lines += 1; }
+    }
+
+    // NOTE: keep constant display window size
+    // Insert missing lines
+    while(num_lines <= cfg.text_height){
+        std.debug.print("~\n", .{});
+        num_lines += 1;
+    }
+
+    std.debug.print("{s}\n", .{border});
 }

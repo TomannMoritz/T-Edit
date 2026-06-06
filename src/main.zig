@@ -37,7 +37,7 @@ pub fn main() !void {
     defer _ = doc_buffer.deinit(allocator);
 
     // setup configuration
-    const doc_config = setup_config();
+    const doc_config = config.Config.setup_config();
     var doc_mode = mode.DocMode{.file_path = file_data.path};
 
     // allocate display buffer
@@ -52,7 +52,7 @@ pub fn main() !void {
 
     // first view
     try doc_buffer.update_display_buffer(display_data, doc_config);
-    try display.display_document(display_data, border, doc_buffer, &doc_mode);
+    try display.display_document(display_data, border, doc_buffer, &doc_mode, &doc_config);
 
 
     // input
@@ -88,9 +88,9 @@ pub fn main() !void {
             try doc_buffer.update_display_buffer(display_data, doc_config);
 
 
-            const num_lines: u8 = doc_config.text_height + 5;
+            const num_lines: u8 = doc_config.text_height + 7;
             display.clear_screen(num_lines);
-            try display.display_document(display_data, border, doc_buffer, &doc_mode);
+            try display.display_document(display_data, border, doc_buffer, &doc_mode, &doc_config);
         }
 
         if (doc_mode.is_exit()){ break; }
@@ -138,20 +138,6 @@ fn setup_document(allocator: std.mem.Allocator, file: ?std.fs.File) !*document_b
     try doc_buffer.update_cursor_line_width();
     return doc_buffer;
 }
-
-
-fn setup_config() config.Config {
-    // TODO: customize configuration
-    const doc_config = config.Config{
-        .text_height = 10,
-        .text_width = 25,
-        .offset_vertical = 1,
-        .offset_horizontal = 2,
-    };
-
-    return doc_config;
-}
-
 
 
 // --------------------------------------------------
