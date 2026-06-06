@@ -101,7 +101,7 @@ pub fn main() !void {
 }
 
 
-fn parse_arguments() !struct {file: std.fs.File, path: []const u8} {
+fn parse_arguments() !struct {file: ?std.fs.File, path: []const u8} {
     const args = std.os.argv;
 
     if (args.len != 2){
@@ -112,19 +112,20 @@ fn parse_arguments() !struct {file: std.fs.File, path: []const u8} {
     const path_null_terminated = args[1];
     const file_path: []const u8 = std.mem.sliceTo(path_null_terminated, 0);
 
-    const file = try std.fs.cwd().openFile(file_path, .{});
+    const file = std.fs.cwd().openFile(file_path, .{}) catch { return .{.file = null, .path = file_path}; };
     return .{.file = file, .path = file_path};
 }
 
 
-fn setup_document(allocator: std.mem.Allocator, file: std.fs.File) !*document_buffer.DocumentBuffer {
+fn setup_document(allocator: std.mem.Allocator, file: ?std.fs.File) !*document_buffer.DocumentBuffer {
     var doc_buffer = try document_buffer.DocumentBuffer.create(allocator);
     var last_node: ?*document_buffer.DocumentNode = null;
+    if (file == null){ return doc_buffer; }
 
     // save file data
     while (true) {
         var buf: [document_buffer.init_size]u8 = [_]u8{@intFromEnum(CodePoint.NULL)} ** document_buffer.init_size;
-        const bytes_read = try file.read(&buf);
+        const bytes_read = try file.?.read(&buf);
 
         if (bytes_read == 0){ break; }
 

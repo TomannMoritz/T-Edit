@@ -281,7 +281,7 @@ pub const DocMode = struct {
         }
 
         // write/save file
-        if (key == @intFromEnum(Key.WRITE) or true){
+        if (key == @intFromEnum(Key.WRITE)){
             // create allocator
             var gpa = std.heap.GeneralPurposeAllocator(.{}){};
             const allocator = gpa.allocator();
