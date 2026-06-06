@@ -1,5 +1,13 @@
-.zig-cache/
-zig-out/
-*.o
+# ignore everything
+*
 
-*.txt
+# exclude
+.gitignore
+*.md
+*.zig
+*.zon
+
+!src/
+!src/*
+
+
