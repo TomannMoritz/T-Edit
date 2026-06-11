@@ -67,7 +67,7 @@ pub const DocMode = struct {
         const key: u8 = buffer[0];
 
         switch (self.mode){
-            Mode.Normal => self.parse_normal_mode(key, doc_buffer, cfg),
+            Mode.Normal => self.parse_normal_mode(key, doc_buffer),
             Mode.Insert => self.parse_insert_mode(key, doc_buffer),
             Mode.Command => try self.parse_command_mode(key, doc_buffer),
             Mode.Exit => {},
@@ -79,97 +79,109 @@ pub const DocMode = struct {
 
     // --------------------------------------------------
     // Normal Mode
-    fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer, cfg : *const Config) void {
+    fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer) void {
         // --------------------------------------------------
         // special
-        // switch to command mode
-        if (key == @intFromEnum(Key.COMMAND_MODE)){
-            self.mode = Mode.Command;
-            return;
-        }
+        if (key == @intFromEnum(Key.COMMAND_MODE)){ switch_command_mode(self, doc_buffer, 1); }
+        if (key == @intFromEnum(Key.INSERT_UNDER_CURSOR)){ switch_input_mode(self, doc_buffer, 1); }
 
         // --------------------------------------------------
         // movement
-        // TODO: update display only when required (out of bounds)
-        // move left
-        if (key == @intFromEnum(Key.MOVE_LEFT)){
-            doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x -| 1;
+        if (key == @intFromEnum(Key.MOVE_LEFT)){ move_left(self, doc_buffer, 1); }
+        if (key == @intFromEnum(Key.MOVE_RIGHT)){ move_right(self, doc_buffer, 1); }
 
-            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
-            doc_buffer.v_pos_x = doc_buffer.pos_x;
-
-            self.update.display = true;
-        }
-
-        // move right
-        if (key == @intFromEnum(Key.MOVE_RIGHT)){
-            doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x +| 1;
-
-            doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
-            doc_buffer.v_pos_x = doc_buffer.pos_x;
-
-            self.update.display = true;
-        }
-
-        // move up
-        if (key == @intFromEnum(Key.MOVE_LINE_UP)){
-            doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y -| 1;
-
-            self.update.line_width = true;
-            self.update.display = true;
-        }
-
-        // move down
-        if (key == @intFromEnum(Key.MOVE_LINE_DOWN)){
-            doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y +| 1;
-
-            self.update.line_width = true;
-            self.update.display = true;
-        }
-
+        if (key == @intFromEnum(Key.MOVE_LINE_UP)){ move_up(self, doc_buffer, 1); }
+        if (key == @intFromEnum(Key.MOVE_LINE_DOWN)){ move_down(self, doc_buffer, 1); }
 
         // --------------------------------------------------
         // delete characters
         // delete under cursor
-        if (key == @intFromEnum(Key.REMOVE_UNDER_CURSOR)){
-            if (doc_buffer.delete_right(1)) |_| {
-            }else |err| {
-                std.debug.print("ERROR: {any}\n", .{err});
-            }
+        if (key == @intFromEnum(Key.REMOVE_UNDER_CURSOR)){ delete_right(self, doc_buffer, 1); }
+        if (key == @intFromEnum(Key.REMOVE_BEFORE_CURSOR)){ delete_left(self, doc_buffer, 1); }
+    }
 
-            self.update.display = true;
+
+    pub fn switch_command_mode(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+            self.mode = Mode.Command;
+            _ = doc_buffer;
+            _ = counter;
+    }
+
+
+    pub fn switch_input_mode(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+        self.mode = Mode.Insert;
+
+        self.update.display = true;
+        _ = doc_buffer;
+        _ = counter;
+    }
+
+
+    pub fn move_left(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+        doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x -| counter;
+
+        doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+        doc_buffer.v_pos_x = doc_buffer.pos_x;
+
+        self.update.display = true;
+    }
+
+
+    pub fn move_right(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+        doc_buffer.cursor.pos_x = doc_buffer.cursor.pos_x +| counter;
+
+        doc_buffer.cursor.v_pos_x = doc_buffer.cursor.pos_x;
+        doc_buffer.v_pos_x = doc_buffer.pos_x;
+
+        self.update.display = true;
+    }
+
+
+    pub fn move_up(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+        doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y -| counter;
+
+        self.update.line_width = true;
+        self.update.display = true;
+    }
+
+
+    pub fn move_down(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+        doc_buffer.cursor.pos_y = doc_buffer.cursor.pos_y +| counter;
+
+        self.update.line_width = true;
+        self.update.display = true;
+    }
+
+
+    pub fn delete_right(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+        if (doc_buffer.delete_right(counter)) |_| {
+        }else |err| {
+            std.debug.print("ERROR: {any}\n", .{err});
         }
 
+        self.update.display = true;
+    }
+
+
+    pub fn delete_left(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
         // delete left of cursor
         // special case:
         //      the cursor can be at the first character in the current buffer
         //      as a result a previous buffer with characters is required
         //  => move cursor left and delete towards the right side
         //  => additionally the cursor is already at the correct position
-        if (key == @intFromEnum(Key.REMOVE_BEFORE_CURSOR)){
-            const pos_x_before : u32 = doc_buffer.cursor.pos_x;
-            const new_key : u8 = @intFromEnum(Key.MOVE_LEFT);
-            _ = parse_normal_mode(self, new_key, doc_buffer, cfg);
-            const pos_x_after : u32 = doc_buffer.cursor.pos_x;
+        const pos_x_before : u32 = doc_buffer.cursor.pos_x;
+        move_left(self, doc_buffer, counter);
+        const pos_x_after : u32 = doc_buffer.cursor.pos_x;
 
-            if (pos_x_before == pos_x_after){ return; }
+        if (pos_x_before == pos_x_after){ return; }
 
-            if (doc_buffer.delete_right(1)) |_| {
-            }else |err| {
-                std.debug.print("ERROR: {any}\n", .{err});
-            }
-
-            self.update.display = true;
+        if (doc_buffer.delete_right(counter)) |_| {
+        }else |err| {
+            std.debug.print("ERROR: {any}\n", .{err});
         }
 
-
-        // --------------------------------------------------
-        // insert mode
-        if (key == @intFromEnum(Key.INSERT_UNDER_CURSOR)){
-            self.mode = Mode.Insert;
-
-            self.update.display = true;
-        }
+        self.update.display = true;
     }
 
 
