@@ -137,3 +137,97 @@ pub const KeyTree = struct {
     }
 };
 
+
+// --------------------------------------------------
+// Testing
+// --------------------------------------------------
+fn test_function(_: *DocMode, _: *DocumentBuffer, _: u32) void { }
+
+test "create KeyTree" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer _ = gpa.deinit();
+
+    var new_key_tree = try KeyTree.create(allocator);
+    defer new_key_tree.deinit(allocator);
+}
+
+
+test "create KeyNode" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer _ = gpa.deinit();
+
+    const char: u8 = 'a';
+    const description: []const u8 = "Description";
+
+    const new_key_node = try KeyNode.create(allocator, char, description, null);
+    defer new_key_node.deinit(allocator);
+
+
+    try std.testing.expectEqual(new_key_node.symbol, char);
+    try std.testing.expectEqual(new_key_node.description, description);
+}
+
+
+test "create KeyTree - KeyNode" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer _ = gpa.deinit();
+
+    var new_key_tree = try KeyTree.create(allocator);
+    defer new_key_tree.deinit(allocator);
+
+    const sequence: []const u8 = "ab";
+    const description: []const u8 = "Description";
+    try new_key_tree.insert_key(sequence, description, test_function);
+
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].symbol, sequence[0]);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[0].symbol, sequence[1]);
+
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].description, null);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[0].description, description);
+}
+
+
+test "create KeyTree - KeyNodes" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer _ = gpa.deinit();
+
+    var new_key_tree = try KeyTree.create(allocator);
+    defer new_key_tree.deinit(allocator);
+
+
+    const sequence_1: []const u8 = "ab";
+    const description_1: []const u8 = "Description 1";
+
+    const sequence_2: []const u8 = "acd";
+    const description_2: []const u8 = "Description 2";
+
+    const sequence_3: []const u8 = "ad";
+    const description_3: []const u8 = "Description 3";
+
+    try new_key_tree.insert_key(sequence_1, description_1, test_function);
+    try new_key_tree.insert_key(sequence_2, description_2, test_function);
+    try new_key_tree.insert_key(sequence_3, description_3, test_function);
+
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].symbol, sequence_1[0]);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[0].symbol, sequence_1[1]);
+
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].symbol, sequence_2[0]);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[1].symbol, sequence_2[1]);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[1].nodes.?.items[0].symbol, sequence_2[2]);
+
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].symbol, sequence_3[0]);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[2].symbol, sequence_3[1]);
+
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].description, null);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[0].description, description_1);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[1].description, null);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[1].nodes.?.items[0].description, description_2);
+    try std.testing.expectEqual(new_key_tree.nodes.?.items[0].nodes.?.items[2].description, description_3);
+
+    new_key_tree.print();
+}
+
