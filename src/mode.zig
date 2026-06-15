@@ -14,6 +14,8 @@ const key_tree = @import("key_tree.zig");
 
 
 pub const Key = enum(u8){
+    INVALID = 0,
+
     // special
     NORMAL_MODE = @intFromEnum(CodePoint.ESCAPE),
 
@@ -45,6 +47,8 @@ pub const DocMode = struct {
     update: Update = Update{},
     file_path: []const u8,
     normal_key_tree: *key_tree.KeyTree,
+    sequence_buffer: [8]u8,
+    sequence_index: u8,
 
     
     pub fn create(allocator: std.mem.Allocator, file_path: []const u8) !*DocMode {
@@ -52,12 +56,14 @@ pub const DocMode = struct {
         doc_mode.allocator = allocator;
         doc_mode.file_path = file_path;
         doc_mode.mode = Mode.Normal;
+        doc_mode.reset_buffer();
 
         // create normal key tree
         doc_mode.normal_key_tree = try key_tree.KeyTree.create(allocator);
 
-        try doc_mode.normal_key_tree.insert_key(":", "Move Cursor Right", switch_command_mode);
-        try doc_mode.normal_key_tree.insert_key("i", "Move Cursor Right", switch_insert_mode);
+        try doc_mode.normal_key_tree.insert_key(&[_]u8{@intFromEnum(Key.NORMAL_MODE)}, "Reset Input Buffer", reset_normal_mode);
+        try doc_mode.normal_key_tree.insert_key(":", "Switch into COMMAND Mode", switch_command_mode);
+        try doc_mode.normal_key_tree.insert_key("i", "Switch into INSERT Mode", switch_insert_mode);
 
         try doc_mode.normal_key_tree.insert_key("j", "Move Cursor Down", move_down);
         try doc_mode.normal_key_tree.insert_key("k", "Move Cursor Up", move_up);
@@ -76,6 +82,11 @@ pub const DocMode = struct {
         defer self.normal_key_tree.deinit(self.allocator);
     }
 
+    fn reset_buffer(self: *DocMode) void {
+        self.sequence_buffer = [_]u8{@intFromEnum(Key.INVALID)} ** self.sequence_buffer.len;
+        self.sequence_index = 0;
+    }
+
 
     pub fn is_exit(self: *DocMode) bool {
         return self.mode == Mode.Exit;
@@ -83,14 +94,21 @@ pub const DocMode = struct {
 
 
     pub fn input(self: *DocMode, buffer : []u8, doc_buffer: *DocumentBuffer, cfg : *const Config) !void {
-        // TODO: evaluate further inputs
-        const key: u8 = buffer[0];
+        // insert new sequence values
+        for (buffer) |ele| {
+            if (ele == @intFromEnum(Key.INVALID)) break;
+            if (ele == @intFromEnum(Key.NORMAL_MODE)) self.reset_buffer();
+            if (self.sequence_index >= self.sequence_buffer.len) break;
 
+            self.sequence_buffer[self.sequence_index] = ele;
+            self.sequence_index += 1;
+        }
+
+        const sequence = self.sequence_buffer[0..self.sequence_index];
         switch (self.mode){
-            // TODO: check for valid buffer length
-            Mode.Normal => self.parse_normal_mode(buffer[0..1], doc_buffer),
-            Mode.Insert => self.parse_insert_mode(key, doc_buffer),
-            Mode.Command => try self.parse_command_mode(key, doc_buffer),
+            Mode.Normal => self.parse_normal_mode(sequence, doc_buffer),
+            Mode.Insert => self.parse_insert_mode(sequence, doc_buffer),
+            Mode.Command => try self.parse_command_mode(sequence, doc_buffer),
             Mode.Exit => {},
         }
 
@@ -105,22 +123,26 @@ pub const DocMode = struct {
 
         const function = self.normal_key_tree.get_function(sequence).?;
         function(self, doc_buffer, 1);
+
+        // reset
+        self.reset_buffer();
     }
 
 
-    pub fn switch_command_mode(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+    pub fn reset_normal_mode(self: *DocMode, _: *DocumentBuffer, _: u32) void {
+        self.reset_buffer();
+    }
+
+
+    pub fn switch_command_mode(self: *DocMode, _: *DocumentBuffer, _: u32) void {
             self.mode = Mode.Command;
-            _ = doc_buffer;
-            _ = counter;
     }
 
 
-    pub fn switch_insert_mode(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+    pub fn switch_insert_mode(self: *DocMode, _: *DocumentBuffer, _: u32) void {
         self.mode = Mode.Insert;
 
         self.update.display = true;
-        _ = doc_buffer;
-        _ = counter;
     }
 
 
@@ -267,53 +289,69 @@ pub const DocMode = struct {
     // --------------------------------------------------
     // Insert Mode
     // TODO: update screen/display position
-    fn parse_insert_mode(self: *DocMode, key : u8, doc_buffer: *DocumentBuffer) void {
-        // normal mode
-        if (key == @intFromEnum(Key.NORMAL_MODE)){
-            self.mode = Mode.Normal;
+    fn parse_insert_mode(self: *DocMode, sequence: []u8, doc_buffer: *DocumentBuffer) void {
+        for (sequence) |key| {
+            // normal mode
+            if (key == @intFromEnum(Key.NORMAL_MODE)){
+                self.mode = Mode.Normal;
+                self.reset_buffer();
+                return;
+            }
+
+            const valid_char = 32 <= key and key <= 126;
+            const is_enter: bool = key == @intFromEnum(CodePoint.NEW_LINE);
+
+            if (valid_char or is_enter){
+                const chars : [1]u8 = [_]u8{key};
+                _ = doc_buffer.insert_data(&chars) catch { };
+
+                self.update.display = true;
+            }
         }
 
-        const valid_char = 32 <= key and key <= 126;
-        const is_enter: bool = key == @intFromEnum(CodePoint.NEW_LINE);
-
-        if (valid_char or is_enter){
-            const chars : [1]u8 = [_]u8{key};
-            _ = doc_buffer.insert_data(&chars) catch { };
-
-            self.update.display = true;
-        }
+        self.reset_buffer();
     }
 
 
     // --------------------------------------------------
     // Command Mode
-    fn parse_command_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer) !void {
-        // normal mode
-        if (key == @intFromEnum(Key.NORMAL_MODE)){
-            self.mode = Mode.Normal;
+    fn parse_command_mode(self: *DocMode, sequence: []u8, doc_buffer: *DocumentBuffer) !void {
+        for (sequence) |key| {
+            // normal mode
+            if (key == @intFromEnum(Key.NORMAL_MODE)){
+                self.mode = Mode.Normal;
+                self.reset_buffer();
+                return;
+            }
+
+            // quit
+            if (key == @intFromEnum(Key.QUIT)){
+                self.mode = Mode.Exit;
+                self.reset_buffer();
+                return;
+            }
+
+            // write/save file
+            if (key == @intFromEnum(Key.WRITE)){
+                // create allocator
+                var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+                const allocator = gpa.allocator();
+                defer _ = gpa.deinit();
+
+                // allocate write buffer
+                const buf_write = try allocator.alloc(u8, doc_buffer.num_elements);
+                defer allocator.free(buf_write);
+                @memset(buf_write, @intFromEnum(CodePoint.NULL));
+
+                try doc_buffer.update_document_buf_data(buf_write);
+                try std.fs.cwd().writeFile(.{.sub_path = self.file_path, .data=buf_write});
+
+                self.reset_buffer();
+                return;
+            }
         }
 
-        // quit
-        if (key == @intFromEnum(Key.QUIT)){
-            self.mode = Mode.Exit;
-            return;
-        }
-
-        // write/save file
-        if (key == @intFromEnum(Key.WRITE)){
-            // create allocator
-            var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-            const allocator = gpa.allocator();
-            defer _ = gpa.deinit();
-
-            // allocate write buffer
-            const buf_write = try allocator.alloc(u8, doc_buffer.num_elements);
-            defer allocator.free(buf_write);
-            @memset(buf_write, @intFromEnum(CodePoint.NULL));
-
-            try doc_buffer.update_document_buf_data(buf_write);
-            try std.fs.cwd().writeFile(.{.sub_path = self.file_path, .data=buf_write});
-        }
+        self.reset_buffer();
     }
 };
 

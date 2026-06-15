@@ -90,7 +90,7 @@ pub fn main() !void {
             try doc_buffer.update_display_buffer(display_data, doc_config);
 
 
-            const num_lines: u8 = doc_config.text_height + 7;
+            const num_lines: u8 = doc_config.text_height + 8;
             display.clear_screen(num_lines);
             try display.display_document(display_data, border, doc_buffer, doc_mode, &doc_config);
         }
