@@ -9,25 +9,13 @@ const CodePoint = @import("codepoint.zig").CodePoint;
 
 const DocumentBuffer = @import("document_buffer.zig").DocumentBuffer;
 const Config = @import("config.zig").Config;
+const key_tree = @import("key_tree.zig");
+
 
 
 pub const Key = enum(u8){
     // special
     NORMAL_MODE = @intFromEnum(CodePoint.ESCAPE),
-    COMMAND_MODE = ':',
-
-    // movement
-    MOVE_LINE_DOWN = 'j',
-    MOVE_LINE_UP = 'k',
-    MOVE_RIGHT = 'l',
-    MOVE_LEFT = 'h',
-
-    // deletion
-    REMOVE_BEFORE_CURSOR = 'X',
-    REMOVE_UNDER_CURSOR = 'x',
-
-    // insertion
-    INSERT_UNDER_CURSOR = 'i',
 
     // command mode
     QUIT = 'q',
@@ -52,9 +40,41 @@ pub const Update = struct {
 
 
 pub const DocMode = struct {
-    mode: Mode = Mode.Normal,
+    allocator: std.mem.Allocator,
+    mode: Mode,
     update: Update = Update{},
     file_path: []const u8,
+    normal_key_tree: *key_tree.KeyTree,
+
+    
+    pub fn create(allocator: std.mem.Allocator, file_path: []const u8) !*DocMode {
+        var doc_mode = try allocator.create(DocMode);
+        doc_mode.allocator = allocator;
+        doc_mode.file_path = file_path;
+        doc_mode.mode = Mode.Normal;
+
+        // create normal key tree
+        doc_mode.normal_key_tree = try key_tree.KeyTree.create(allocator);
+
+        try doc_mode.normal_key_tree.insert_key(":", "Move Cursor Right", switch_command_mode);
+        try doc_mode.normal_key_tree.insert_key("i", "Move Cursor Right", switch_insert_mode);
+
+        try doc_mode.normal_key_tree.insert_key("j", "Move Cursor Down", move_down);
+        try doc_mode.normal_key_tree.insert_key("k", "Move Cursor Up", move_up);
+        try doc_mode.normal_key_tree.insert_key("h", "Move Cursor Left", move_left);
+        try doc_mode.normal_key_tree.insert_key("l", "Move Cursor Right", move_right);
+
+        try doc_mode.normal_key_tree.insert_key("x", "Delete Under Cursor", delete_right);
+        try doc_mode.normal_key_tree.insert_key("X", "Delete Before Cursor", delete_left);
+
+        return doc_mode;
+    }
+
+
+    pub fn deinit(self: *DocMode) void {
+        defer self.allocator.destroy(self);
+        defer self.normal_key_tree.deinit(self.allocator);
+    }
 
 
     pub fn is_exit(self: *DocMode) bool {
@@ -67,7 +87,8 @@ pub const DocMode = struct {
         const key: u8 = buffer[0];
 
         switch (self.mode){
-            Mode.Normal => self.parse_normal_mode(key, doc_buffer),
+            // TODO: check for valid buffer length
+            Mode.Normal => self.parse_normal_mode(buffer[0..1], doc_buffer),
             Mode.Insert => self.parse_insert_mode(key, doc_buffer),
             Mode.Command => try self.parse_command_mode(key, doc_buffer),
             Mode.Exit => {},
@@ -79,25 +100,11 @@ pub const DocMode = struct {
 
     // --------------------------------------------------
     // Normal Mode
-    fn parse_normal_mode(self: *DocMode, key: u8, doc_buffer: *DocumentBuffer) void {
-        // --------------------------------------------------
-        // special
-        if (key == @intFromEnum(Key.COMMAND_MODE)){ switch_command_mode(self, doc_buffer, 1); }
-        if (key == @intFromEnum(Key.INSERT_UNDER_CURSOR)){ switch_input_mode(self, doc_buffer, 1); }
+    fn parse_normal_mode(self: *DocMode, sequence: []u8, doc_buffer: *DocumentBuffer) void {
+        if (self.normal_key_tree.get_function(sequence) == null) return;
 
-        // --------------------------------------------------
-        // movement
-        if (key == @intFromEnum(Key.MOVE_LEFT)){ move_left(self, doc_buffer, 1); }
-        if (key == @intFromEnum(Key.MOVE_RIGHT)){ move_right(self, doc_buffer, 1); }
-
-        if (key == @intFromEnum(Key.MOVE_LINE_UP)){ move_up(self, doc_buffer, 1); }
-        if (key == @intFromEnum(Key.MOVE_LINE_DOWN)){ move_down(self, doc_buffer, 1); }
-
-        // --------------------------------------------------
-        // delete characters
-        // delete under cursor
-        if (key == @intFromEnum(Key.REMOVE_UNDER_CURSOR)){ delete_right(self, doc_buffer, 1); }
-        if (key == @intFromEnum(Key.REMOVE_BEFORE_CURSOR)){ delete_left(self, doc_buffer, 1); }
+        const function = self.normal_key_tree.get_function(sequence).?;
+        function(self, doc_buffer, 1);
     }
 
 
@@ -108,7 +115,7 @@ pub const DocMode = struct {
     }
 
 
-    pub fn switch_input_mode(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
+    pub fn switch_insert_mode(self: *DocMode, doc_buffer: *DocumentBuffer, counter: u32) void {
         self.mode = Mode.Insert;
 
         self.update.display = true;

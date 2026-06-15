@@ -38,7 +38,9 @@ pub fn main() !void {
 
     // setup configuration
     const doc_config = config.Config.setup_config();
-    var doc_mode = mode.DocMode{.file_path = file_data.path};
+    var doc_mode = try mode.DocMode.create(allocator, file_data.path);
+    defer doc_mode.deinit();
+
 
     // allocate display buffer
     const display_data = try allocator.alloc(u8, display_buf_size);
@@ -52,7 +54,7 @@ pub fn main() !void {
 
     // first view
     try doc_buffer.update_display_buffer(display_data, doc_config);
-    try display.display_document(display_data, border, doc_buffer, &doc_mode, &doc_config);
+    try display.display_document(display_data, border, doc_buffer, doc_mode, &doc_config);
 
 
     // input
@@ -90,7 +92,7 @@ pub fn main() !void {
 
             const num_lines: u8 = doc_config.text_height + 7;
             display.clear_screen(num_lines);
-            try display.display_document(display_data, border, doc_buffer, &doc_mode, &doc_config);
+            try display.display_document(display_data, border, doc_buffer, doc_mode, &doc_config);
         }
 
         if (doc_mode.is_exit()){ break; }
