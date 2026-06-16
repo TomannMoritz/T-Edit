@@ -15,6 +15,7 @@ const key_tree = @import("key_tree.zig");
 
 pub const Key = enum(u8){
     INVALID = 0,
+    ASCII_ZERO = '0',
 
     // special
     NORMAL_MODE = @intFromEnum(CodePoint.ESCAPE),
@@ -49,6 +50,7 @@ pub const DocMode = struct {
     normal_key_tree: *key_tree.KeyTree,
     sequence_buffer: [8]u8,
     sequence_index: u8,
+    sequence_count: u32,
 
     
     pub fn create(allocator: std.mem.Allocator, file_path: []const u8) !*DocMode {
@@ -85,6 +87,8 @@ pub const DocMode = struct {
     fn reset_buffer(self: *DocMode) void {
         self.sequence_buffer = [_]u8{@intFromEnum(Key.INVALID)} ** self.sequence_buffer.len;
         self.sequence_index = 0;
+
+        self.sequence_count = 0;
     }
 
 
@@ -99,6 +103,17 @@ pub const DocMode = struct {
             if (ele == @intFromEnum(Key.INVALID)) break;
             if (ele == @intFromEnum(Key.NORMAL_MODE)) self.reset_buffer();
             if (self.sequence_index >= self.sequence_buffer.len) break;
+
+            // extract numbers
+            const num_base = 10;
+            const is_number = ele >= @intFromEnum(Key.ASCII_ZERO) and ele <= (@intFromEnum(Key.ASCII_ZERO) + num_base - 1);
+            const is_normal_mode = self.mode == Mode.Normal;
+            if (is_number and is_normal_mode){
+                // NOTE: clamp count at max value
+                const shifted_count = self.sequence_count *| num_base;
+                self.sequence_count = shifted_count +| ele - @intFromEnum(Key.ASCII_ZERO);
+                continue;
+            }
 
             self.sequence_buffer[self.sequence_index] = ele;
             self.sequence_index += 1;
@@ -122,7 +137,7 @@ pub const DocMode = struct {
         if (self.normal_key_tree.get_function(sequence) == null) return;
 
         const function = self.normal_key_tree.get_function(sequence).?;
-        function(self, doc_buffer, 1);
+        function(self, doc_buffer, @max(self.sequence_count, 1));
 
         // reset
         self.reset_buffer();
